@@ -1,5 +1,7 @@
 import type { Theme } from "../../theme";
 
+const VERSION = import.meta.env.VITE_VERSION ?? "dev";
+
 type Props = {
   baseUrl: string;
   onDisconnect: () => void;
@@ -34,7 +36,9 @@ export function Topbar({
         </div>
         <div className="ob-brand-text">
           <span className="ob-brand-name">TRACKERDEX</span>
-          <span className="ob-brand-sub">SIGNAL OBSERVATORY · v0.1</span>
+          <span className="ob-brand-sub">
+            SIGNAL OBSERVATORY · v{VERSION}
+          </span>
         </div>
       </div>
       <div className="ob-topbar-status">

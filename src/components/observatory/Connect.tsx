@@ -2,6 +2,8 @@ import { useState } from "react";
 import { PiholeClient, PiholeError } from "../../pihole";
 import type { StoredConnection } from "../../types";
 
+const VERSION = import.meta.env.VITE_VERSION ?? "dev";
+
 type Props = {
   onConnect: (
     client: PiholeClient,
@@ -131,7 +133,7 @@ export function Connect({ onConnect, onDemo }: Props): React.ReactElement {
           </div>
         </form>
         <footer className="ob-connect-foot">
-          <span>v0.1</span>
+          <span>v{VERSION}</span>
           <span>·</span>
           <span>RADAR data: DUCKDUCKGO</span>
           <span>·</span>

@@ -1,5 +1,8 @@
 # --- builder ---
 FROM node:22-alpine AS builder
+ARG VERSION=dev
+# Vite inlines VITE_* env vars at build time so the UI can show the version.
+ENV VITE_VERSION=$VERSION
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
