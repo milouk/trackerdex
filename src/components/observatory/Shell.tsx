@@ -7,12 +7,7 @@ import { PanelHead } from "./PanelHead";
 import { Sidebar } from "./Sidebar";
 import { Ticker } from "./Ticker";
 import { Topbar } from "./Topbar";
-import {
-  SORT_ORDER,
-  type Filter,
-  type LiveEvent,
-  type Sort,
-} from "./types";
+import { nextSort, type Filter, type LiveEvent, type Sort } from "./types";
 
 type Props = {
   dex: Dex;
@@ -29,41 +24,41 @@ type Props = {
 
 const RENDER_CAP = 240;
 
-function sortEntries(
-  list: DexEntry[],
+const DEFAULT_SORT: Sort = { field: "PREVALENCE", dir: "desc" };
+
+function compareSort(
+  a: DexEntry,
+  b: DexEntry,
   sort: Sort,
   catches: CatchState,
-): DexEntry[] {
-  const sorted = list.slice();
-  switch (sort) {
+): number {
+  let primary = 0;
+  switch (sort.field) {
     case "PREVALENCE":
-      // Already in rank order from the dex builder, but explicit so tier/type
-      // filters still produce a stable rank-asc ordering.
-      sorted.sort((a, b) => a.rank - b.rank);
+      // Rank ascending = prevalence descending in the source data.
+      primary = sort.dir === "desc" ? a.rank - b.rank : b.rank - a.rank;
       break;
-    case "RECENT":
-      sorted.sort((a, b) => {
-        const la = catches[a.id]?.lastSeen ?? -1;
-        const lb = catches[b.id]?.lastSeen ?? -1;
-        return lb - la || a.rank - b.rank;
-      });
+    case "RECENT": {
+      const la = catches[a.id]?.lastSeen ?? -1;
+      const lb = catches[b.id]?.lastSeen ?? -1;
+      primary = sort.dir === "desc" ? lb - la : la - lb;
       break;
-    case "ENCOUNTERS":
-      sorted.sort((a, b) => {
-        const ea = catches[a.id]?.encounters ?? 0;
-        const eb = catches[b.id]?.encounters ?? 0;
-        return eb - ea || a.rank - b.rank;
-      });
+    }
+    case "ENCOUNTERS": {
+      const ea = catches[a.id]?.encounters ?? 0;
+      const eb = catches[b.id]?.encounters ?? 0;
+      primary = sort.dir === "desc" ? eb - ea : ea - eb;
       break;
+    }
     case "NAME":
-      sorted.sort((a, b) =>
-        a.displayName.localeCompare(b.displayName, "en", {
-          sensitivity: "base",
-        }),
-      );
+      primary = a.displayName.localeCompare(b.displayName, "en", {
+        sensitivity: "base",
+      });
+      if (sort.dir === "desc") primary = -primary;
       break;
   }
-  return sorted;
+  // Stable secondary by rank to avoid jitter when primary keys tie.
+  return primary || a.rank - b.rank;
 }
 
 export function Shell({
@@ -78,18 +73,14 @@ export function Shell({
   theme,
   onToggleTheme,
 }: Props): React.ReactElement {
-  const [sort, setSort] = useState<Sort>("PREVALENCE");
+  const [sort, setSort] = useState<Sort>(DEFAULT_SORT);
 
-  // Stable callbacks so memoized children don't re-render on every Shell tick.
   const handleSelect = useCallback(
     (entry: DexEntry) => onSelect(entry),
     [onSelect],
   );
   const cycleSort = useCallback(() => {
-    setSort((current) => {
-      const idx = SORT_ORDER.indexOf(current);
-      return SORT_ORDER[(idx + 1) % SORT_ORDER.length]!;
-    });
+    setSort((current) => nextSort(current));
   }, []);
 
   const filtered = useMemo(() => {
@@ -121,10 +112,11 @@ export function Shell({
     return out;
   }, [dex.entries, catches, filter]);
 
-  const sorted = useMemo(
-    () => sortEntries(filtered, sort, catches),
-    [filtered, sort, catches],
-  );
+  const sorted = useMemo(() => {
+    const list = filtered.slice();
+    list.sort((a, b) => compareSort(a, b, sort, catches));
+    return list;
+  }, [filtered, sort, catches]);
 
   const visible = sorted.slice(0, RENDER_CAP);
   const overflow = sorted.length - visible.length;

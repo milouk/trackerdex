@@ -162,6 +162,14 @@
   0%   { transform: translateX(0); }
   100% { transform: translateX(-50%); }
 }
+/* Pause the marquee when the tab is hidden — saves CPU on idle browser
+   tabs. Class toggled from src/main.tsx via Page Visibility API. */
+html.is-hidden .ob-ticker-track {
+  animation-play-state: paused;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ob-ticker-track { animation: none; }
+}
 .ob-ticker-item { display: inline-flex; gap: 10px; align-items: center; }
 .ob-ticker-time { color: var(--ob-fg-3); font-size: 10px; letter-spacing: 0.06em; }
 .ob-ticker-arrow { color: var(--ob-rule-2); }

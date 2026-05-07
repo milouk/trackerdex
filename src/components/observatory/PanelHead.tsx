@@ -1,7 +1,7 @@
 import { memo, useMemo } from "react";
 import type { CatchState, DexEntry } from "../../types";
 import { fmt, shortNum } from "../../utils/format";
-import { SORT_LABEL, SORT_TOOLTIP, type Sort } from "./types";
+import { sortLabel, SORT_TOOLTIP, type Sort } from "./types";
 
 type Props = {
   entries: DexEntry[];
@@ -60,7 +60,7 @@ export const PanelHead = memo(function PanelHead({
             onClick={onCycleSort}
             title={SORT_TOOLTIP}
           >
-            {SORT_LABEL[sort]}
+            {sortLabel(sort)}
           </button>
         </div>
       </div>

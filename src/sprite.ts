@@ -4,4 +4,4 @@
  */
 
 export { renderSpriteToCanvas, SPRITE_GRID_SIZE, type Sprite } from "./sprite/generator";
-export { getSprite } from "./sprite/cache";
+export { getSprite, warmSpriteCache } from "./sprite/cache";

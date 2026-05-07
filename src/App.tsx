@@ -20,6 +20,7 @@ import {
   saveCatches,
   saveConnection,
 } from "./storage";
+import { warmSpriteCache } from "./sprite";
 import { useTheme } from "./theme";
 import type {
   CatchState,
@@ -84,6 +85,11 @@ export default function App(): React.ReactElement {
         const loaded = await loadDex();
         if (!alive) return;
         setDex(loaded);
+        // Pre-warm sprite cache for the entries most likely to be visible
+        // on first paint, in idle slices so we don't block first render.
+        warmSpriteCache(
+          loaded.entries.slice(0, 240).map((e) => e.entityName),
+        );
 
         const saved = loadConnection();
         if (saved) {

@@ -17,24 +17,50 @@ export type Filter = {
   view: View;
 };
 
-export type Sort = "PREVALENCE" | "RECENT" | "ENCOUNTERS" | "NAME";
+export type SortField = "PREVALENCE" | "RECENT" | "ENCOUNTERS" | "NAME";
+export type SortDir = "asc" | "desc";
+export type Sort = { field: SortField; dir: SortDir };
 
-export const SORT_LABEL: Record<Sort, string> = {
-  PREVALENCE: "PREVALENCE ↓",
-  RECENT: "RECENT ↓",
-  ENCOUNTERS: "ENCOUNTERS ↓",
-  NAME: "NAME ↑",
+const FIELD_LABEL: Record<SortField, string> = {
+  PREVALENCE: "PREVALENCE",
+  RECENT: "RECENT",
+  ENCOUNTERS: "ENCOUNTERS",
+  NAME: "NAME",
 };
 
-export const SORT_ORDER: Sort[] = [
-  "PREVALENCE",
-  "RECENT",
-  "ENCOUNTERS",
-  "NAME",
+const DIR_ARROW: Record<SortDir, string> = {
+  asc: "↑",
+  desc: "↓",
+};
+
+export function sortLabel(sort: Sort): string {
+  return `${FIELD_LABEL[sort.field]} ${DIR_ARROW[sort.dir]}`;
+}
+
+/**
+ * Cycle through 4 fields × 2 directions = 8 states. For each field the
+ * "natural" direction comes first (most→least for numbers, A→Z for names).
+ */
+export const SORT_CYCLE: Sort[] = [
+  { field: "PREVALENCE", dir: "desc" },
+  { field: "PREVALENCE", dir: "asc" },
+  { field: "RECENT", dir: "desc" },
+  { field: "RECENT", dir: "asc" },
+  { field: "ENCOUNTERS", dir: "desc" },
+  { field: "ENCOUNTERS", dir: "asc" },
+  { field: "NAME", dir: "asc" },
+  { field: "NAME", dir: "desc" },
 ];
 
+export function nextSort(current: Sort): Sort {
+  const idx = SORT_CYCLE.findIndex(
+    (s) => s.field === current.field && s.dir === current.dir,
+  );
+  return SORT_CYCLE[(idx + 1) % SORT_CYCLE.length]!;
+}
+
 export const SORT_TOOLTIP =
-  "Click to cycle: web prevalence (default), most recently encountered, most encounters in your network, alphabetical.";
+  "Click to cycle through 4 fields × 2 directions: web prevalence, most recent encounter, most encounters in your network, alphabetical — each with both directions.";
 
 /** Threshold of encounters at which an entity flips to its shiny sprite. */
 export const SHINY_THRESHOLD = 15_000;

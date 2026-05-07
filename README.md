@@ -201,6 +201,207 @@ cors_hosts = ["http://your-host:8080"]
 - **Persistence**: `localStorage` only
 - **Deploy**: nginx + Docker (multi-arch ghcr image)
 
+## For nerds
+
+A grab bag of implementation lore for the curious.
+
+### Sprite generation
+
+Every tracker is rendered with a TypeScript port of
+[daboth/pagan](https://github.com/daboth/pagan) (GPL-2.0). At runtime,
+for each entity name:
+
+1. Hash the name with chained 32-bit **FNV-1a**
+   ([src/utils/hash.ts](src/utils/hash.ts)). Each round mixes the previous
+   output back in so successive 8-char chunks aren't correlated. We keep
+   running until we have ≥48 hex chars — that's what pagan's grinder
+   expects.
+2. Slice the hash: the first 48 chars become 8 RGB colors; chars 0–6
+   pick a "clothing aspect" (one of 16 combos of HAIR/PANTS/TOP/BOOTS);
+   chars 6–12 pick a "weapon loadout" (one of 71 — 5 two-handers + 6
+   one-handers + 36 dual-wields + 24 weapon+shield pairs).
+3. For each chosen layer, parse the matching `.pgn` template (18×18
+   ASCII grid; `o` = fixed pixel, `+` = optional based on a hash digit
+   modulo 2). Mirror around column 8 for body parts; weapons stay
+   asymmetric. Hand-designed templates ship under
+   [src/sprite-templates/](src/sprite-templates/) — 22 of them total.
+4. Composite in pagan's order: **body → torso → hair → subfield →
+   boots → weapon A → weapon B → shield deco**. Each layer reads its own
+   color from the 8-color palette (palette index per layer is hard-wired
+   to match the reference).
+
+Output: a 16×16 grid of RGB tuples or `null` (transparent), rendered to
+canvas at the requested scale (6 in cards, 16 in detail).
+
+Sprites are **cached globally** — the algorithm runs at most once per
+unique seed for the lifetime of the page. The cache is **pre-warmed on
+idle** for the top 240 entries right after `dex.json` loads, so the
+first scroll has no jank.
+
+### The shiny mechanic
+
+A tracker becomes shiny at **≥15,000 cumulative encounters** in your
+network. The sprite seed flips from `"Google"` to `"Google::shiny1"`,
+producing a different deterministic loadout (different aspect, weapons,
+colors — same algorithm). Because the seed is fully deterministic,
+**everyone's shiny Google looks identical**. There's no per-user
+randomization anywhere in the project.
+
+### Pagan algorithm parity
+
+The TS port is faithful enough that the same entity name produces the
+same output as the Python reference. The arithmetic in the grinder
+(`mapDecision = numDecisions / (MAX+1) × (digitsum+1)` and
+`chooseFromList`'s "return the last entry whose index is strictly less
+than the decision") is reproduced verbatim — including the edge case
+where decisions ≤ 0 return an empty list (which means "no aspect / no
+weapon"; rare in practice with a hash chunk of `000000`, but the parity
+matters).
+
+Spot-check sample (matches between Python ref and our TS):
+
+| Entity     | Aspect                       | Weapons              |
+|------------|------------------------------|----------------------|
+| Google     | hair + pants                 | hammer + dagger      |
+| Cloudflare | hair + pants + boots + top   | round shield + mace  |
+| Adobe      | hair + pants + boots + top   | wand (two-handed)    |
+| LiveRamp   | boots                        | shield + hammer      |
+
+### The astronomical coordinates
+
+The detail page shows fake **RA** (Right Ascension) and **DEC**
+(Declination) numbers to sell the "signal observatory" aesthetic. They
+aren't real positions:
+
+- `RA  = (entityName.length × 13) mod 360 °`
+- `DEC = prevalence × 90 °`
+
+Pure flavor. Hover the labels for an in-app tooltip that says so.
+
+### Domain rollup
+
+Pi-hole logs queries at the **subdomain** level (e.g.
+`pubads.g.doubleclick.net`). Trackerdex strips to the **registrable
+domain** via the Public Suffix List (`tldts`), then resolves it through
+a flat `domain → entityId` map shipped in `dex.json`. So
+`pubads.g.doubleclick.net` → `doubleclick.net` → `Google`. This is why
+~50 different Google subdomains all map to the same monster.
+
+The map is built once by [scripts/build-dex.ts](scripts/build-dex.ts)
+from DuckDuckGo Tracker Radar:
+
+- `domain_map.json` — ~38k subdomains keyed to entity name
+- `entity_prevalence.json` — ~3.8k entities with web prevalence (% of
+  crawled web that includes them)
+
+Joined into `public/dex.json` (~5 MB raw, ~700 KB gzipped).
+
+### Tier thresholds
+
+Computed at build time from each entity's prevalence:
+
+| Tier      | ≥ Prevalence | Count   | Glyph |
+|-----------|--------------|---------|-------|
+| LEGENDARY | 5%           | 41      | ◆◆◆   |
+| RARE      | 0.5%         | 190     | ◆◆·   |
+| UNCOMMON  | 0.05%        | 475     | ◆··   |
+| COMMON    | rest         | 18,384  | ···   |
+
+Higher tier ≠ harder to catch — quite the opposite. LEGENDARY trackers
+are everywhere, so they're the easiest to catch. The naming is
+"legendary in scale," not Pokémon-style legendary rarity. There's a
+tooltip on the RARITY sidebar header that says so.
+
+### Demo mode
+
+When you click **EXPLORE THE DEMO** on the connect screen,
+[src/demo.ts](src/demo.ts) builds a deterministic catch state:
+
+- 100% of legendaries, 70% rares, 30% uncommons, 4% commons (decided by
+  `FNV1a(entity.id) mod 100 < tier.pct`).
+- Encounter counts span each tier's range so a few legendaries cross
+  the 15k shiny threshold.
+- First-seen and last-seen timestamps are derived from the same hash.
+
+Synthetic live events use a pre-computed weighted cumulative array
+sampled at a 4.5-second tick:
+
+```text
+LEGENDARY 8× : RARE 3× : UNCOMMON 2× : COMMON 1×
+```
+
+Demo state is in-memory only; clicking *DISCONNECT* restores your real
+catches from `localStorage`. The `localStorage` write is also skipped
+while in demo mode so synthetic data can't leak into a real user's
+saved state.
+
+### Pi-hole v6 specifics
+
+[src/pihole.ts](src/pihole.ts) speaks the v6 REST API:
+
+- `POST /api/auth { password }` → session ID, sent on subsequent
+  requests via the `X-FTL-SID` header.
+- `GET /api/stats/top_domains?blocked=true&count=1000` — bulk-seeds
+  the dex on connect.
+- `GET /api/queries?from=<since>` polled every **8 seconds**.
+
+Statuses considered "blocked":
+
+```text
+GRAVITY · REGEX · DENYLIST · *_CNAME variants
+EXTERNAL_BLOCKED_IP · EXTERNAL_BLOCKED_NULL · EXTERNAL_BLOCKED_NXRA
+DBBUSY · SPECIAL_DOMAIN
+```
+
+In dev, [vite.config.ts](vite.config.ts) proxies `/api/*` to
+`VITE_PIHOLE_URL` so the browser sees Pi-hole as same-origin — no CORS
+config required on the Pi-hole side.
+
+### Performance plumbing
+
+Most of this you won't notice, which is the point:
+
+- **Sprite cache** — `Map<seed, Sprite>`, no eviction (~40 KB live
+  for 19k entities).
+- **Idle pre-warm** — top 240 sprites pre-generated via
+  `requestIdleCallback` after dex loads.
+- **`<link rel="preload">`** on `dex.json` so the 5 MB fetch starts
+  during JS download instead of after.
+- **`React.memo`** on Card / Sidebar / PanelHead with stable
+  callbacks — feed updates and catch increments don't cascade through
+  240 visible cards.
+- **Debounced `localStorage` writes** — 400 ms; bulk-seeding 1000
+  entries doesn't trigger 1000 `JSON.stringify` cycles.
+- **Marquee paused** when the tab is hidden — Page Visibility API
+  toggles `animation-play-state: paused` on the live ticker.
+- **`useLayoutEffect`** for canvas painting — no flash of empty
+  canvas during scroll-driven remounts.
+- **Render cap** — 240 cards on screen max, sort applied first; the
+  "+N more" placeholder card tells you to narrow the filter.
+- **Domain resolver** — exact `domainMap` hit tried first; PSL parse
+  is the fallback.
+- **Synthetic ticker** — weighted cumulative array, O(log n) per tick.
+
+### Sizes
+
+```text
+JS bundle:   343 KB raw  / 115 KB gzipped
+CSS:          20 KB raw  /   4 KB gzipped
+HTML:        1.0 KB raw  /  ~0.5 KB gzipped
+dex.json:    5.2 MB raw  / ~700 KB gzipped
+```
+
+The dex is the heavyweight; everything else is small.
+
+### Why GPL-2.0?
+
+Because pagan is GPL-2.0 and we ship its `.pgn` templates verbatim.
+Without the templates the procgen wouldn't have hand-designed body
+parts; with them, the project must inherit the license. Forks must
+remain GPL-2.0 or compatible. If you need MIT-style licensing, fork
+just the non-pagan modules (`pihole.ts`, `dex.ts`, the Observatory UI,
+etc.) — all of which are independently authored.
+
 ## Credits
 
 - Tracker data: [DuckDuckGo Tracker Radar](https://github.com/duckduckgo/tracker-radar) (Apache-2.0).

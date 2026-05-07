@@ -7,6 +7,9 @@
     <meta name="theme-color" content="#0b0e12" />
     <title>trackerdex — signal observatory</title>
 
+    <!-- Prefetch the dex while JS downloads — gates first paint. -->
+    <link rel="preload" href="./dex.json" as="fetch" crossorigin="anonymous" />
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
