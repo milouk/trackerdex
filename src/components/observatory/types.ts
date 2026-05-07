@@ -17,6 +17,25 @@ export type Filter = {
   view: View;
 };
 
+export type Sort = "PREVALENCE" | "RECENT" | "ENCOUNTERS" | "NAME";
+
+export const SORT_LABEL: Record<Sort, string> = {
+  PREVALENCE: "PREVALENCE ↓",
+  RECENT: "RECENT ↓",
+  ENCOUNTERS: "ENCOUNTERS ↓",
+  NAME: "NAME ↑",
+};
+
+export const SORT_ORDER: Sort[] = [
+  "PREVALENCE",
+  "RECENT",
+  "ENCOUNTERS",
+  "NAME",
+];
+
+export const SORT_TOOLTIP =
+  "Click to cycle: web prevalence (default), most recently encountered, most encounters in your network, alphabetical.";
+
 /** Threshold of encounters at which an entity flips to its shiny sprite. */
 export const SHINY_THRESHOLD = 15_000;
 

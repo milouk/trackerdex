@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { Theme } from "../../theme";
 import type { CatchState, Dex, DexEntry } from "../../types";
 import { Card } from "./Card";
@@ -7,7 +7,12 @@ import { PanelHead } from "./PanelHead";
 import { Sidebar } from "./Sidebar";
 import { Ticker } from "./Ticker";
 import { Topbar } from "./Topbar";
-import type { Filter, LiveEvent } from "./types";
+import {
+  SORT_ORDER,
+  type Filter,
+  type LiveEvent,
+  type Sort,
+} from "./types";
 
 type Props = {
   dex: Dex;
@@ -24,6 +29,43 @@ type Props = {
 
 const RENDER_CAP = 240;
 
+function sortEntries(
+  list: DexEntry[],
+  sort: Sort,
+  catches: CatchState,
+): DexEntry[] {
+  const sorted = list.slice();
+  switch (sort) {
+    case "PREVALENCE":
+      // Already in rank order from the dex builder, but explicit so tier/type
+      // filters still produce a stable rank-asc ordering.
+      sorted.sort((a, b) => a.rank - b.rank);
+      break;
+    case "RECENT":
+      sorted.sort((a, b) => {
+        const la = catches[a.id]?.lastSeen ?? -1;
+        const lb = catches[b.id]?.lastSeen ?? -1;
+        return lb - la || a.rank - b.rank;
+      });
+      break;
+    case "ENCOUNTERS":
+      sorted.sort((a, b) => {
+        const ea = catches[a.id]?.encounters ?? 0;
+        const eb = catches[b.id]?.encounters ?? 0;
+        return eb - ea || a.rank - b.rank;
+      });
+      break;
+    case "NAME":
+      sorted.sort((a, b) =>
+        a.displayName.localeCompare(b.displayName, "en", {
+          sensitivity: "base",
+        }),
+      );
+      break;
+  }
+  return sorted;
+}
+
 export function Shell({
   dex,
   catches,
@@ -36,11 +78,19 @@ export function Shell({
   theme,
   onToggleTheme,
 }: Props): React.ReactElement {
-  // Stable callback so memoized Card never re-renders just because Shell did.
+  const [sort, setSort] = useState<Sort>("PREVALENCE");
+
+  // Stable callbacks so memoized children don't re-render on every Shell tick.
   const handleSelect = useCallback(
     (entry: DexEntry) => onSelect(entry),
     [onSelect],
   );
+  const cycleSort = useCallback(() => {
+    setSort((current) => {
+      const idx = SORT_ORDER.indexOf(current);
+      return SORT_ORDER[(idx + 1) % SORT_ORDER.length]!;
+    });
+  }, []);
 
   const filtered = useMemo(() => {
     const q = filter.query.trim().toLowerCase();
@@ -56,7 +106,6 @@ export function Shell({
           !e.displayName.toLowerCase().includes(q) &&
           !e.entityName.toLowerCase().includes(q)
         ) {
-          // Fall back to scanning owned domains only when the cheap checks miss.
           let matched = false;
           for (const d of e.domains) {
             if (d.includes(q)) {
@@ -72,17 +121,13 @@ export function Shell({
     return out;
   }, [dex.entries, catches, filter]);
 
-  // Cap render: keep all caught + first N uncaught.
-  const { visible, overflow } = useMemo(() => {
-    const caughtList: DexEntry[] = [];
-    const uncaughtList: DexEntry[] = [];
-    for (const e of filtered) {
-      (catches[e.id] ? caughtList : uncaughtList).push(e);
-    }
-    const tail = Math.max(0, RENDER_CAP - caughtList.length);
-    const list = caughtList.concat(uncaughtList.slice(0, tail));
-    return { visible: list, overflow: filtered.length - list.length };
-  }, [filtered, catches]);
+  const sorted = useMemo(
+    () => sortEntries(filtered, sort, catches),
+    [filtered, sort, catches],
+  );
+
+  const visible = sorted.slice(0, RENDER_CAP);
+  const overflow = sorted.length - visible.length;
 
   return (
     <div className="dir-observatory">
@@ -101,7 +146,12 @@ export function Shell({
           onChange={onFilterChange}
         />
         <main className="ob-main">
-          <PanelHead entries={dex.entries} catches={catches} />
+          <PanelHead
+            entries={dex.entries}
+            catches={catches}
+            sort={sort}
+            onCycleSort={cycleSort}
+          />
           <div className="ob-grid is-comfy">
             {visible.map((e) => (
               <Card

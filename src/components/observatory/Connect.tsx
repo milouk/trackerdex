@@ -56,11 +56,31 @@ export function Connect({ onConnect, onDemo }: Props): React.ReactElement {
           <span>READY</span>
           <span className="ob-pulse" />
         </div>
-        <h1 className="ob-connect-title">Establish uplink.</h1>
+        <h1 className="ob-connect-title">trackerdex</h1>
         <p className="ob-connect-sub">
-          Trackerdex needs to talk to your Pi-hole. Credentials are sent only
-          to the host you specify; a session token is kept in this browser.
+          A bestiary of internet trackers, populated by your Pi-hole's blocked
+          DNS log. ~19,000 entities; every blocked query is a catch.
         </p>
+
+        <button
+          type="button"
+          className="ob-btn-demo"
+          onClick={onDemo}
+          title="Explore the dex with synthetic catches — no Pi-hole required."
+        >
+          <span className="ob-btn-demo-label">EXPLORE THE DEMO</span>
+          <span className="ob-btn-demo-sub">
+            populated dex, fake live ticker — no setup
+          </span>
+          <span className="ob-btn-demo-arrow" aria-hidden="true">
+            →
+          </span>
+        </button>
+
+        <div className="ob-connect-divider">
+          <span>or connect a real Pi-hole</span>
+        </div>
+
         <form className="ob-connect-form" onSubmit={handleSubmit}>
           <label className="ob-field">
             <span className="ob-field-label">HOST</span>
@@ -91,7 +111,8 @@ export function Connect({ onConnect, onDemo }: Props): React.ReactElement {
               />
             </span>
             <span className="ob-field-hint">
-              Generate an APP password under Settings · API in Pi-hole v6.
+              Pi-hole v6 only. Generate an APP password under Settings · API.
+              Trackerdex stores only the session token in this browser.
             </span>
           </label>
           {error && (
@@ -106,14 +127,6 @@ export function Connect({ onConnect, onDemo }: Props): React.ReactElement {
               disabled={busy}
             >
               {busy ? "UPLINK …" : "UPLINK →"}
-            </button>
-            <button
-              type="button"
-              className="ob-btn-ghost"
-              onClick={onDemo}
-              title="Skip the uplink and explore with synthetic data."
-            >
-              RUN OFFLINE
             </button>
           </div>
         </form>

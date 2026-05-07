@@ -1,15 +1,20 @@
 import { memo, useMemo } from "react";
 import type { CatchState, DexEntry } from "../../types";
 import { fmt, shortNum } from "../../utils/format";
+import { SORT_LABEL, SORT_TOOLTIP, type Sort } from "./types";
 
 type Props = {
   entries: DexEntry[];
   catches: CatchState;
+  sort: Sort;
+  onCycleSort: () => void;
 };
 
 export const PanelHead = memo(function PanelHead({
   entries,
   catches,
+  sort,
+  onCycleSort,
 }: Props): React.ReactElement {
   const stats = useMemo(() => {
     let caught = 0;
@@ -47,9 +52,16 @@ export const PanelHead = memo(function PanelHead({
           <span className="ob-pstat-label">RARE+ ON GRID</span>
           <span className="ob-pstat-value">{stats.rarePlus}</span>
         </div>
-        <div className="ob-pstat">
+        <div className="ob-pstat ob-pstat-clickable">
           <span className="ob-pstat-label">SORT</span>
-          <span className="ob-pstat-value ob-pstat-sortable">PREVALENCE ↓</span>
+          <button
+            type="button"
+            className="ob-pstat-value ob-pstat-sortable"
+            onClick={onCycleSort}
+            title={SORT_TOOLTIP}
+          >
+            {SORT_LABEL[sort]}
+          </button>
         </div>
       </div>
     </header>
