@@ -1,7 +1,7 @@
 {
   "name": "trackerdex",
   "private": true,
-  "version": "1.0.1",
+  "version": "1.0.2",
   "type": "module",
   "license": "GPL-2.0-or-later",
   "description": "A bestiary of internet trackers — your Pi-hole catches them",

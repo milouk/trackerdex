@@ -115,8 +115,12 @@ export default function App(): React.ReactElement {
         }
 
         // No saved session — try the runtime-config credentials silently.
-        if (runtime.piholeHost && runtime.piholePassword) {
-          const client = new PiholeClient(runtime.piholeHost);
+        // Default to same-origin when piholeHost is unset: the container
+        // proxies /api/* to the Pi-hole on its private network, so we
+        // never need cross-origin browser fetches.
+        if (runtime.piholePassword) {
+          const url = runtime.piholeHost || window.location.origin;
+          const client = new PiholeClient(url);
           try {
             const session = await client.login(runtime.piholePassword);
             if (!alive) return;
