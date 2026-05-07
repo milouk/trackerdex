@@ -15,7 +15,7 @@
 
 <p align="center">
   <a href="https://github.com/milouk/trackerdex/actions/workflows/build.yml"><img alt="build" src="https://github.com/milouk/trackerdex/actions/workflows/build.yml/badge.svg"></a>
-  <a href="https://milouk.me/trackerdex/"><img alt="pages" src="https://github.com/milouk/trackerdex/actions/workflows/pages.yml/badge.svg"></a>
+  <a href="https://milouk.me/projects/trackerdex/"><img alt="pages" src="https://github.com/milouk/trackerdex/actions/workflows/pages.yml/badge.svg"></a>
   <a href="https://github.com/milouk/trackerdex/pkgs/container/trackerdex"><img alt="ghcr" src="https://img.shields.io/badge/ghcr.io-milouk%2Ftrackerdex-2496ED?logo=docker&logoColor=white"></a>
   <a href="https://github.com/milouk/trackerdex"><img alt="stars" src="https://img.shields.io/github/stars/milouk/trackerdex?style=flat&logo=github"></a>
   <a href="https://github.com/milouk/trackerdex/commits/main"><img alt="last commit" src="https://img.shields.io/github/last-commit/milouk/trackerdex?logo=github"></a>
@@ -34,7 +34,7 @@ Real entity catalogue from
 [DuckDuckGo Tracker Radar](https://github.com/duckduckgo/tracker-radar).
 Sprite engine ported from [daboth/pagan](https://github.com/daboth/pagan).
 
-**🛰️ Live demo: <https://milouk.me/trackerdex/>**
+**🛰️ Live demo: <https://milouk.me/projects/trackerdex/>**
 
 Zero-config self-host: `docker run -p 8080:80 ghcr.io/milouk/trackerdex:latest` — done.
 

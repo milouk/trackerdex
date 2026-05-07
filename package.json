@@ -11,6 +11,7 @@
     "build:app": "tsc -b && vite build",
     "build": "npm run build:dex && npm run build:app",
     "preview": "vite preview --host 0.0.0.0 --port 4173",
+    "screenshots": "tsx scripts/screenshots.mts",
     "typecheck": "tsc -b --noEmit",
     "lint": "tsc -b --noEmit"
   },
@@ -24,6 +25,7 @@
     "@types/react": "^19.0.7",
     "@types/react-dom": "^19.0.3",
     "@vitejs/plugin-react": "^4.3.4",
+    "puppeteer-core": "^24.43.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
     "vite": "^6.0.7"
