@@ -38,8 +38,6 @@ Sprite engine ported from [daboth/pagan](https://github.com/daboth/pagan).
 
 Zero-config self-host: `docker run -p 8080:80 ghcr.io/milouk/trackerdex:latest` — done.
 
-![Observatory · dark](docs/screenshots/dark.png)
-
 ## What is it
 
 Trackerdex turns your Pi-hole's `/api/queries` and `/api/stats/top_domains`
