@@ -8,13 +8,36 @@ export type LiveEvent = {
   isFirstCatch: boolean;
 };
 
+export type View = "ALL" | "CAUGHT" | "UNCAUGHT";
+
 export type Filter = {
   type: TrackerType | "ALL";
   tier: Tier | "ALL";
   query: string;
-  showCaught: boolean;
-  showUncaught: boolean;
+  view: View;
 };
+
+/** Threshold of encounters at which an entity flips to its shiny sprite. */
+export const SHINY_THRESHOLD = 15_000;
+
+export const TIER_TOOLTIP: Record<Tier, string> = {
+  LEGENDARY:
+    "Found on ≥5% of the crawled web. The biggest trackers — Google, Cloudflare, Meta. Easy to catch (they're everywhere) but legendary in scale.",
+  RARE: "Found on ≥0.5% of the crawled web. Common-but-not-everywhere trackers.",
+  UNCOMMON:
+    "Found on ≥0.05% of the crawled web. Niche-specific or regional trackers.",
+  COMMON:
+    "Long tail. Obscure or single-site trackers. Web prevalence below 0.05%.",
+};
+
+export const RARITY_TOOLTIP =
+  "Tier comes from DuckDuckGo Tracker Radar's prevalence stat — what fraction of the crawled web includes this tracker. Higher tier means more influential, not harder to catch.";
+
+export const RA_TOOLTIP =
+  "Right Ascension — a cosmetic astronomical-style coordinate generated from the entity's name length. Not a real position; pure flavor for the Observatory aesthetic.";
+
+export const DEC_TOOLTIP =
+  "Declination — derived from web prevalence (× 90°). Cosmetic, sells the sky-survey theme.";
 
 export const TYPE_LABEL: Record<TrackerType, string> = {
   ADVERTISING: "Advertising",

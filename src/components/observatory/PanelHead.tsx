@@ -1,25 +1,17 @@
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import type { CatchState, DexEntry } from "../../types";
+import { fmt, shortNum } from "../../utils/format";
 
 type Props = {
   entries: DexEntry[];
   catches: CatchState;
 };
 
-function fmt(n: number): string {
-  return n.toLocaleString("en-US");
-}
-
-function shortNum(n: number): string {
-  if (n >= 1e9) return `${(n / 1e9).toFixed(2)}B`;
-  if (n >= 1e6) return `${(n / 1e6).toFixed(2)}M`;
-  if (n >= 1e3) return `${(n / 1e3).toFixed(1)}k`;
-  return String(n);
-}
-
-export function PanelHead({ entries, catches }: Props): React.ReactElement {
+export const PanelHead = memo(function PanelHead({
+  entries,
+  catches,
+}: Props): React.ReactElement {
   const stats = useMemo(() => {
-    const total = entries.length;
     let caught = 0;
     let encounters = 0;
     let rarePlus = 0;
@@ -30,7 +22,7 @@ export function PanelHead({ entries, catches }: Props): React.ReactElement {
       encounters += cap.encounters;
       if (e.tier === "RARE" || e.tier === "LEGENDARY") rarePlus++;
     }
-    return { total, caught, encounters, rarePlus };
+    return { total: entries.length, caught, encounters, rarePlus };
   }, [entries, catches]);
 
   return (
@@ -57,11 +49,9 @@ export function PanelHead({ entries, catches }: Props): React.ReactElement {
         </div>
         <div className="ob-pstat">
           <span className="ob-pstat-label">SORT</span>
-          <span className="ob-pstat-value ob-pstat-sortable">
-            PREVALENCE ↓
-          </span>
+          <span className="ob-pstat-value ob-pstat-sortable">PREVALENCE ↓</span>
         </div>
       </div>
     </header>
   );
-}
+});

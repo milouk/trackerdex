@@ -10,14 +10,15 @@
  * https://github.com/daboth/pagan
  */
 
-const FIXED_PIXEL = "o";
-const OPTIONAL_PIXEL = "+";
-
 /** Apex column for symmetry mirroring (matches pagan's IMAGE_APEX). */
 const IMAGE_APEX = 8;
+const CH_NL = 10; // \n
+const CH_CR = 13; // \r
+const CH_FIXED = 111; // 'o'
+const CH_OPTIONAL = 43; // '+'
 
 /** A pixel coordinate inside the 16×16 virtual grid, [row, col]. */
-export type Pixel = readonly [number, number];
+type Pixel = readonly [number, number];
 
 /** A list of pixels that make up one rendering layer. */
 export type Layer = Pixel[];
@@ -35,18 +36,24 @@ export function parsePagan(
   const drawmap: Pixel[] = [];
   const optmap: Pixel[] = [];
 
-  const lines = source.split(/\r?\n/);
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]!;
-    for (let j = 0; j < line.length; j++) {
-      const char = line[j];
-      if (char === FIXED_PIXEL) drawmap.push([i - 1, j - 1]);
-      else if (char === OPTIONAL_PIXEL) optmap.push([i - 1, j - 1]);
+  // Fast path: walk chars manually rather than split → array → re-iterate.
+  let row = 0;
+  let col = 0;
+  for (let i = 0; i < source.length; i++) {
+    const ch = source.charCodeAt(i);
+    if (ch === CH_NL) {
+      row++;
+      col = 0;
+      continue;
     }
+    if (ch === CH_CR) continue;
+    if (ch === CH_FIXED) drawmap.push([row - 1, col - 1]);
+    else if (ch === CH_OPTIONAL) optmap.push([row - 1, col - 1]);
+    col++;
   }
 
   const extmap = decideOptionalPixels(optmap, hashcode);
-  let result: Pixel[] = [...drawmap, ...extmap];
+  let result: Pixel[] = drawmap.concat(extmap);
 
   if (opts.sym) result = enforceVerticalSymmetry(result);
   else if (opts.invert) result = invertVertical(result);
@@ -55,42 +62,49 @@ export function parsePagan(
 }
 
 /**
- * For each optional pixel, consume a hex digit from the *end* of the hash and
- * keep the pixel only if the digit is even. Mirrors pagan's right-to-left
- * consumption of hash digits.
+ * For each optional pixel, consume a hex digit from the *end* of the hash
+ * and keep the pixel only if the digit is even. Mirrors pagan's
+ * right-to-left consumption of hash digits.
  */
 function decideOptionalPixels(optmap: Pixel[], hashcode: string): Pixel[] {
   const result: Pixel[] = [];
-  let control = hashcode;
+  let hashIdx = hashcode.length - 1;
   for (const px of optmap) {
-    const lastChar = control.charAt(control.length - 1);
-    control = control.slice(0, -1);
-    const dec = parseInt(lastChar, 16);
-    if (!Number.isNaN(dec) && dec % 2 === 0) result.push(px);
+    if (hashIdx < 0) break;
+    const code = hashcode.charCodeAt(hashIdx--);
+    // 0..9 → 48..57; a..f → 97..102; A..F → 65..70
+    const dec =
+      code >= 48 && code <= 57
+        ? code - 48
+        : code >= 97 && code <= 102
+          ? code - 87
+          : code >= 65 && code <= 70
+            ? code - 55
+            : NaN;
+    if (!Number.isNaN(dec) && (dec & 1) === 0) result.push(px);
   }
   return result;
 }
 
-function diff(a: number, b: number): number {
-  return Math.abs(a - b);
-}
-
 function enforceVerticalSymmetry(pixmap: Pixel[]): Pixel[] {
-  const mirror: Pixel[] = [];
-  for (const [y, x] of pixmap) {
-    const dx = diff(x, IMAGE_APEX);
-    if (x <= IMAGE_APEX) mirror.push([y, x + 2 * dx - 1]);
-    else mirror.push([y, x - 2 * dx - 1]);
+  const out: Pixel[] = new Array(pixmap.length * 2);
+  for (let i = 0; i < pixmap.length; i++) {
+    const [y, x] = pixmap[i]!;
+    const dx = x <= IMAGE_APEX ? IMAGE_APEX - x : x - IMAGE_APEX;
+    const mirroredX = x <= IMAGE_APEX ? x + 2 * dx - 1 : x - 2 * dx - 1;
+    out[i] = [y, mirroredX];
+    out[pixmap.length + i] = pixmap[i]!;
   }
-  return [...mirror, ...pixmap];
+  return out;
 }
 
 function invertVertical(pixmap: Pixel[]): Pixel[] {
-  const mirror: Pixel[] = [];
-  for (const [y, x] of pixmap) {
-    const dx = diff(x, IMAGE_APEX);
-    if (x <= IMAGE_APEX) mirror.push([y, x + 2 * dx - 1]);
-    else mirror.push([y, x - 2 * dx - 1]);
+  const out: Pixel[] = new Array(pixmap.length);
+  for (let i = 0; i < pixmap.length; i++) {
+    const [y, x] = pixmap[i]!;
+    const dx = x <= IMAGE_APEX ? IMAGE_APEX - x : x - IMAGE_APEX;
+    const mirroredX = x <= IMAGE_APEX ? x + 2 * dx - 1 : x - 2 * dx - 1;
+    out[i] = [y, mirroredX];
   }
-  return mirror;
+  return out;
 }

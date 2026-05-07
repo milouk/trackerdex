@@ -1,7 +1,20 @@
 import { useEffect } from "react";
 import type { Catch, DexEntry } from "../../types";
+import {
+  fmt,
+  isoMinuteUtc,
+  shortNum,
+  signalBars,
+  tierGlyph,
+} from "../../utils/format";
 import { SpriteImg } from "../SpriteImg";
-import { TYPE_LABEL } from "./types";
+import {
+  DEC_TOOLTIP,
+  RA_TOOLTIP,
+  SHINY_THRESHOLD,
+  TIER_TOOLTIP,
+  TYPE_LABEL,
+} from "./types";
 
 type Props = {
   entry: DexEntry;
@@ -9,32 +22,17 @@ type Props = {
   onBack: () => void;
 };
 
-function fmt(n: number): string {
-  return n.toLocaleString("en-US");
-}
-
-function shortNum(n: number): string {
-  if (n >= 1e9) return `${(n / 1e9).toFixed(2)}B`;
-  if (n >= 1e6) return `${(n / 1e6).toFixed(2)}M`;
-  if (n >= 1e3) return `${(n / 1e3).toFixed(1)}k`;
-  return String(n);
-}
-
-function tierGlyph(tier: DexEntry["tier"]): string {
-  if (tier === "LEGENDARY") return "◆◆◆";
-  if (tier === "RARE") return "◆◆·";
-  if (tier === "UNCOMMON") return "◆··";
-  return "···";
-}
-
-function signalBars(prevalence: number): number {
-  return Math.max(1, Math.min(5, Math.round(prevalence * 28)));
-}
+const SIGNAL_BARS = [0, 1, 2, 3, 4] as const;
+const SPARK_BARS = Array.from({ length: 24 }, (_, i) => i);
 
 function fakeRA(entry: DexEntry): string {
   const a = (entry.entityName.length * 13) % 360;
   const b = (entry.rank * 7) % 60;
   return `${a}.${String(b).padStart(2, "0")}°`;
+}
+
+function sparkHeight(rank: number, i: number): number {
+  return (Math.sin((i + rank) * 0.7) * 0.5 + 0.6) * 30 + 6;
 }
 
 export function Detail({
@@ -52,6 +50,7 @@ export function Detail({
 
   const caught = !!capture;
   const bars = signalBars(entry.prevalence);
+  const isShiny = caught && capture.encounters >= SHINY_THRESHOLD;
 
   return (
     <div className="dir-observatory ob-detail-page">
@@ -61,19 +60,38 @@ export function Detail({
           onClick={onBack}
           role="button"
           tabIndex={0}
-          onKeyDown={(e) => (e.key === "Enter" ? onBack() : null)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              onBack();
+            }
+          }}
         >
           ← INDEX
         </span>
         <span className="ob-detail-crumb">PANEL · 02 · OBJECT</span>
         <span className="ob-detail-id">
-          DEX-{String(entry.rank).padStart(4, "0")}
+          DEX-{entry.rank.toString().padStart(4, "0")}
         </span>
       </header>
       <div className="ob-detail-body">
         <section className="ob-detail-plate-wrap">
           <div className="ob-detail-plate">
-            <SpriteImg entry={entry} scale={16} silhouette={!caught} />
+            <SpriteImg
+              entry={entry}
+              scale={16}
+              silhouette={!caught}
+              variant={isShiny ? 1 : 0}
+            />
+            {isShiny && (
+              <span
+                className="ob-card-shiny ob-card-shiny-lg"
+                title={`Shiny variant — unlocked at ≥${fmt(SHINY_THRESHOLD)} encounters with this tracker.`}
+                aria-label="Shiny variant"
+              >
+                ★
+              </span>
+            )}
             <div
               className="ob-card-reticle ob-card-reticle-lg"
               aria-hidden="true"
@@ -85,9 +103,13 @@ export function Detail({
             </div>
           </div>
           <div className="ob-detail-tape">
-            <span>RA · {fakeRA(entry)}</span>
-            <span>DEC · +{(entry.prevalence * 90).toFixed(2)}°</span>
-            <span>TIER {tierGlyph(entry.tier)}</span>
+            <span title={RA_TOOLTIP}>RA · {fakeRA(entry)}</span>
+            <span title={DEC_TOOLTIP}>
+              DEC · +{(entry.prevalence * 90).toFixed(2)}°
+            </span>
+            <span title={TIER_TOOLTIP[entry.tier]}>
+              TIER {tierGlyph(entry.tier)}
+            </span>
           </div>
         </section>
         <section className="ob-detail-text">
@@ -96,17 +118,15 @@ export function Detail({
           </div>
           <h2 className="ob-detail-name">
             {caught ? entry.displayName : "Unknown emitter"}
+            {isShiny && <span className="ob-shiny-badge">★ shiny</span>}
           </h2>
           <div className="ob-detail-binomial">{entry.entityName}</div>
 
           <div className="ob-detail-bars">
             <span className="ob-detail-bars-label">SIGNAL</span>
             <span className="ob-bars">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <span
-                  key={i}
-                  className={`ob-bar ${i < bars ? "is-on" : ""}`}
-                />
+              {SIGNAL_BARS.map((i) => (
+                <span key={i} className={`ob-bar${i < bars ? " is-on" : ""}`} />
               ))}
             </span>
             <span className="ob-detail-bars-val">
@@ -127,21 +147,11 @@ export function Detail({
             </div>
             <div>
               <dt>FIRST CONTACT</dt>
-              <dd>
-                {caught
-                  ? new Date(capture.firstSeen).toISOString().slice(0, 16) +
-                    "Z"
-                  : "PENDING"}
-              </dd>
+              <dd>{caught ? isoMinuteUtc(capture.firstSeen) : "PENDING"}</dd>
             </div>
             <div>
               <dt>LAST CONTACT</dt>
-              <dd>
-                {caught
-                  ? new Date(capture.lastSeen).toISOString().slice(0, 16) +
-                    "Z"
-                  : "—"}
-              </dd>
+              <dd>{caught ? isoMinuteUtc(capture.lastSeen) : "—"}</dd>
             </div>
             <div>
               <dt>PRIMARY DOMAIN</dt>
@@ -149,7 +159,7 @@ export function Detail({
                 <code>{entry.domains[0] ?? "—"}</code>
               </dd>
             </div>
-            <div>
+            <div title={TIER_TOOLTIP[entry.tier]}>
               <dt>CLASSIFICATION</dt>
               <dd>{entry.tier}</dd>
             </div>
@@ -161,18 +171,28 @@ export function Detail({
               <span>{shortNum(caught ? capture.encounters : 0)} TOTAL</span>
             </div>
             <div className="ob-detail-spark-grid">
-              {Array.from({ length: 24 }).map((_, i) => {
-                const h =
-                  (Math.sin((i + entry.rank) * 0.7) * 0.5 + 0.6) * 30 + 6;
-                return (
-                  <span
-                    key={i}
-                    className="ob-spark-bar"
-                    style={{ height: `${h}%` }}
-                  />
-                );
-              })}
+              {SPARK_BARS.map((i) => (
+                <span
+                  key={i}
+                  className="ob-spark-bar"
+                  style={{ height: `${sparkHeight(entry.rank, i)}%` }}
+                />
+              ))}
             </div>
+          </div>
+
+          <div className="ob-detail-domains">
+            <div className="ob-detail-spark-head">
+              <span>OWNED DOMAINS · {fmt(entry.domainCount)}</span>
+              {entry.domainCount > 200 && <span>showing first 200</span>}
+            </div>
+            <ul className="ob-detail-domains-list">
+              {entry.domains.slice(0, 200).map((d) => (
+                <li key={d}>
+                  <code>{d}</code>
+                </li>
+              ))}
+            </ul>
           </div>
         </section>
       </div>

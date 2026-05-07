@@ -7,6 +7,7 @@ type Props = {
     client: PiholeClient,
     storedConnection: StoredConnection,
   ) => void;
+  onDemo: () => void;
 };
 
 const DEFAULT_URL =
@@ -14,7 +15,7 @@ const DEFAULT_URL =
     ? window.location.origin
     : "http://pi.hole";
 
-export function Connect({ onConnect }: Props): React.ReactElement {
+export function Connect({ onConnect, onDemo }: Props): React.ReactElement {
   const [url, setUrl] = useState(DEFAULT_URL);
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -105,6 +106,14 @@ export function Connect({ onConnect }: Props): React.ReactElement {
               disabled={busy}
             >
               {busy ? "UPLINK …" : "UPLINK →"}
+            </button>
+            <button
+              type="button"
+              className="ob-btn-ghost"
+              onClick={onDemo}
+              title="Skip the uplink and explore with synthetic data."
+            >
+              RUN OFFLINE
             </button>
           </div>
         </form>

@@ -6,6 +6,7 @@
  * https://github.com/daboth/pagan
  */
 
+import { expandHexHash } from "../utils/hash";
 import {
   grindAspect,
   grindColors,
@@ -13,7 +14,7 @@ import {
   isShield,
   type RGB,
 } from "./grinder";
-import { parsePagan, type Layer, type Pixel } from "./pgn";
+import { parsePagan, type Layer } from "./pgn";
 import { TEMPLATES } from "./templates";
 
 export const SPRITE_GRID_SIZE = 16;
@@ -26,19 +27,12 @@ export type Sprite = {
   pixels: (RGB | null)[][];
 };
 
+const SILHOUETTE_FILL = "#1a1a2a";
+
 export function generateSprite(seed: string): Sprite {
-  const hash = expandHash(seed);
+  const hash = expandHexHash(seed);
 
   const colors = grindColors(hash);
-  const colorBody = colors[0]!;
-  const colorSubfield = colors[1]!;
-  const colorWeaponA = colors[2]!;
-  const colorWeaponB = colors[3]!;
-  const colorShieldDeco = colors[4]!;
-  const colorBoots = colors[5]!;
-  const colorHair = colors[6]!;
-  const colorTop = colors[7]!;
-
   const aspect = grindAspect(hash);
   const weapons = grindWeapon(hash);
 
@@ -59,46 +53,42 @@ export function generateSprite(seed: string): Sprite {
     { sym: true },
   );
 
-  const hasShield = weapons[0] ? isShield(weapons[0]) : false;
+  const hasShield = !!weapons[0] && isShield(weapons[0]);
   let layerWeaponA: Layer = [];
   let layerWeaponB: Layer = [];
 
-  if (hasShield) {
-    layerWeaponA = parsePagan(TEMPLATES[weapons[0]!]!, hash);
-    if (weapons.length === 2 && weapons[1]) {
-      layerWeaponB = parsePagan(TEMPLATES[weapons[1]]!, hash);
-    }
-  } else {
-    if (weapons[0]) layerWeaponA = parsePagan(TEMPLATES[weapons[0]]!, hash);
-    if (weapons.length === 2 && weapons[1]) {
-      layerWeaponB = parsePagan(TEMPLATES[weapons[1]]!, hash, {
-        invert: true,
-      });
-    }
+  if (weapons[0]) {
+    layerWeaponA = parsePagan(TEMPLATES[weapons[0]]!, hash);
+  }
+  if (weapons.length === 2 && weapons[1]) {
+    // Second weapon is inverted only when dual-wielding (no shield).
+    layerWeaponB = parsePagan(TEMPLATES[weapons[1]]!, hash, {
+      invert: !hasShield,
+    });
   }
 
   const layerShieldDeco = hasShield
     ? parsePagan(TEMPLATES.SHIELD_DECO!, hash)
     : [];
 
-  // Compose in pagan's order: body, top, hair, subfield, boots, weapon a, b, shield deco.
-  const grid: (RGB | null)[][] = makeEmptyGrid();
-  paint(grid, layerBody, colorBody);
-  paint(grid, layerTorso, colorTop);
-  paint(grid, layerHair, colorHair);
-  paint(grid, layerSubfield, colorSubfield);
-  paint(grid, layerBoots, colorBoots);
-  paint(grid, layerWeaponA, colorWeaponA);
-  if (weapons.length === 2) paint(grid, layerWeaponB, colorWeaponB);
-  paint(grid, layerShieldDeco, colorShieldDeco);
+  // Compose in pagan's order: body, top, hair, subfield, boots, weapons, shield deco.
+  const grid = makeEmptyGrid();
+  paint(grid, layerBody, colors[0]!);
+  paint(grid, layerTorso, colors[7]!); // top
+  paint(grid, layerHair, colors[6]!);
+  paint(grid, layerSubfield, colors[1]!);
+  paint(grid, layerBoots, colors[5]!);
+  paint(grid, layerWeaponA, colors[2]!);
+  if (weapons.length === 2) paint(grid, layerWeaponB, colors[3]!);
+  paint(grid, layerShieldDeco, colors[4]!);
 
   return { pixels: grid };
 }
 
 function makeEmptyGrid(): (RGB | null)[][] {
-  const rows: (RGB | null)[][] = [];
+  const rows: (RGB | null)[][] = new Array(SPRITE_GRID_SIZE);
   for (let r = 0; r < SPRITE_GRID_SIZE; r++) {
-    rows.push(new Array<RGB | null>(SPRITE_GRID_SIZE).fill(null));
+    rows[r] = new Array<RGB | null>(SPRITE_GRID_SIZE).fill(null);
   }
   return rows;
 }
@@ -111,37 +101,7 @@ function paint(grid: (RGB | null)[][], layer: Layer, color: RGB): void {
   }
 }
 
-/**
- * Expands an arbitrary seed string into ≥64 hex characters deterministically,
- * suitable for pagan's grinder. We don't need cryptographic strength — just
- * deterministic, sync, and uniform-enough to drive layer/weapon decisions.
- *
- * Approach: chained 32-bit FNV-1a, with the chain accumulating prior outputs
- * so each round depends on all previous rounds (avoiding correlated outputs).
- */
-function expandHash(seed: string, hexChars: number = 64): string {
-  let chain = seed;
-  let out = "";
-  while (out.length < hexChars) {
-    chain = chain + "\x00" + out;
-    const h = fnv1a32(chain);
-    out += h.toString(16).padStart(8, "0");
-  }
-  return out.slice(0, hexChars);
-}
-
-function fnv1a32(s: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 0x01000193) >>> 0;
-  }
-  return h >>> 0;
-}
-
 // ---- Rendering ----
-
-export type Sprite16 = Sprite;
 
 export function renderSpriteToCanvas(
   sprite: Sprite,
@@ -149,29 +109,38 @@ export function renderSpriteToCanvas(
   scale: number,
   options: { silhouette?: boolean } = {},
 ): void {
-  canvas.width = SPRITE_GRID_SIZE * scale;
-  canvas.height = SPRITE_GRID_SIZE * scale;
+  const size = SPRITE_GRID_SIZE * scale;
+  if (canvas.width !== size) canvas.width = size;
+  if (canvas.height !== size) canvas.height = size;
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
   ctx.imageSmoothingEnabled = false;
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0, 0, size, size);
 
+  if (options.silhouette) {
+    ctx.fillStyle = SILHOUETTE_FILL;
+    for (let r = 0; r < SPRITE_GRID_SIZE; r++) {
+      const row = sprite.pixels[r]!;
+      for (let c = 0; c < SPRITE_GRID_SIZE; c++) {
+        if (row[c]) ctx.fillRect(c * scale, r * scale, scale, scale);
+      }
+    }
+    return;
+  }
+
+  // Group fills by color to minimize fillStyle assignments — modest win
+  // since canvas is small but worth it on Detail's 16× scale.
+  let lastColor: RGB | null = null;
   for (let r = 0; r < SPRITE_GRID_SIZE; r++) {
+    const row = sprite.pixels[r]!;
     for (let c = 0; c < SPRITE_GRID_SIZE; c++) {
-      const px = sprite.pixels[r]![c];
+      const px = row[c];
       if (!px) continue;
-      ctx.fillStyle = options.silhouette
-        ? "#1a1a2a"
-        : `rgb(${px[0]}, ${px[1]}, ${px[2]})`;
+      if (px !== lastColor) {
+        ctx.fillStyle = `rgb(${px[0]},${px[1]},${px[2]})`;
+        lastColor = px;
+      }
       ctx.fillRect(c * scale, r * scale, scale, scale);
     }
   }
-}
-
-/** Convenience: returns true iff the layer contains the given pixel. */
-export function layerContains(layer: Layer, target: Pixel): boolean {
-  for (const [r, c] of layer) {
-    if (r === target[0] && c === target[1]) return true;
-  }
-  return false;
 }

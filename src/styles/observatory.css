@@ -290,6 +290,9 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  /* Grid items default to min-height: auto, which would let .ob-main grow
+     to fit every card and break .ob-grid's overflow scrolling. */
+  min-height: 0;
   position: relative;
 }
 .ob-panel-head {
@@ -407,6 +410,37 @@
 .ob-card-reticle {
   position: absolute; inset: 6px;
   pointer-events: none;
+}
+
+/* Shiny star — sits inset from the top-right of the plate so it doesn't
+   collide with the reticle marks. */
+.ob-card-shiny {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  font-size: 17px;
+  line-height: 1;
+  color: var(--ob-accent-2);
+  text-shadow: 0 0 10px rgba(240, 179, 90, 0.6);
+  pointer-events: auto;
+  cursor: help;
+  z-index: 2;
+}
+.ob-card-shiny-lg {
+  top: 24px;
+  right: 24px;
+  font-size: 26px;
+}
+.ob-shiny-badge {
+  display: inline-block;
+  margin-left: 12px;
+  padding: 2px 8px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: var(--ob-bg);
+  background: var(--ob-accent-2);
+  vertical-align: middle;
 }
 .ob-r { position: absolute; width: 8px; height: 8px; border: 1px solid var(--ob-fg-3); }
 .ob-r-tl { top: 0; left: 0; border-right: 0; border-bottom: 0; }
@@ -565,6 +599,34 @@
   align-items: end;
 }
 .ob-spark-bar { background: var(--ob-accent); height: 30%; }
+
+.ob-detail-domains {
+  margin-top: 6px;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--ob-rule);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ob-detail-domains-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 2px 16px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.ob-detail-domains-list li code {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  color: var(--ob-fg-2);
+  background: transparent;
+}
+.ob-detail-domains-list li:hover code {
+  color: var(--ob-accent);
+}
 
 /* ---------- connect page ---------- */
 .ob-connect-page {

@@ -8,8 +8,8 @@
  * so the recommended deployment runs this app on the same origin as the
  * Pi-hole web UI (e.g. behind the same reverse proxy or as a static asset
  * served by lighttpd next to admin/). When running cross-origin during
- * development, the user must either set webserver.api.cors_hosts in
- * pihole-FTL.toml or use the Vite dev proxy.
+ * development, set webserver.api.cors_hosts in pihole-FTL.toml or use the
+ * Vite dev proxy.
  */
 
 export type PiholeStatus =
@@ -32,7 +32,7 @@ export type PiholeStatus =
   | "CACHE_STALE"
   | "UNKNOWN";
 
-export const BLOCKED_STATUSES = new Set<PiholeStatus>([
+export const BLOCKED_STATUSES: ReadonlySet<string> = new Set<PiholeStatus>([
   "GRAVITY",
   "REGEX",
   "DENYLIST",
@@ -89,15 +89,17 @@ export type Session = {
   csrf?: string;
 };
 
+export type PiholeErrorKind =
+  | "network"
+  | "cors"
+  | "unauthorized"
+  | "bad_status"
+  | "bad_response";
+
 export class PiholeError extends Error {
   constructor(
     message: string,
-    public kind:
-      | "network"
-      | "cors"
-      | "unauthorized"
-      | "bad_status"
-      | "bad_response",
+    public kind: PiholeErrorKind,
     public status?: number,
   ) {
     super(message);
@@ -106,7 +108,7 @@ export class PiholeError extends Error {
 }
 
 /** Normalize a user-entered URL into "scheme://host[:port]" with no path. */
-export function normalizeBaseUrl(input: string): string {
+function normalizeBaseUrl(input: string): string {
   let s = input.trim();
   if (!s) throw new Error("Pi-hole URL is required");
   if (!/^https?:\/\//i.test(s)) s = `http://${s}`;
@@ -121,14 +123,6 @@ export class PiholeClient {
   constructor(baseUrl: string, session?: Session | null) {
     this.baseUrl = normalizeBaseUrl(baseUrl);
     this.session = session ?? null;
-  }
-
-  getSession(): Session | null {
-    return this.session;
-  }
-
-  isAuthenticated(): boolean {
-    return !!this.session && this.session.expiresAt > Date.now() + 5_000;
   }
 
   async login(password: string): Promise<Session> {
@@ -154,10 +148,11 @@ export class PiholeClient {
         401,
       );
     }
+    const validity = res.session.validity ?? 1800;
     const session: Session = {
       sid: res.session.sid,
-      validity: res.session.validity ?? 1800,
-      expiresAt: Date.now() + (res.session.validity ?? 1800) * 1000,
+      validity,
+      expiresAt: Date.now() + validity * 1000,
       csrf: res.session.csrf,
     };
     this.session = session;
@@ -174,11 +169,11 @@ export class PiholeClient {
     this.session = null;
   }
 
-  async getSummary(): Promise<Summary> {
+  getSummary(): Promise<Summary> {
     return this.fetchJson<Summary>("/api/stats/summary");
   }
 
-  async getTopBlockedDomains(count = 200): Promise<TopDomainsResponse> {
+  getTopBlockedDomains(count = 200): Promise<TopDomainsResponse> {
     const params = new URLSearchParams({
       blocked: "true",
       count: String(count),
@@ -189,23 +184,24 @@ export class PiholeClient {
   }
 
   /**
-   * Fetches recent queries. `from`/`until` are unix timestamps in seconds;
-   * leave `from` undefined to use the server default (recent N).
+   * Fetches recent queries. `from`/`until` are unix timestamps in seconds.
    */
-  async getQueries(opts: {
-    from?: number;
-    until?: number;
-    length?: number;
-    cursor?: number;
-  } = {}): Promise<{ queries: Query[]; cursor: number | null }> {
+  getQueries(
+    opts: {
+      from?: number;
+      until?: number;
+      length?: number;
+      cursor?: number;
+    } = {},
+  ): Promise<{ queries: Query[]; cursor: number | null }> {
     const params = new URLSearchParams();
     if (opts.from !== undefined) params.set("from", String(opts.from));
     if (opts.until !== undefined) params.set("until", String(opts.until));
     if (opts.length !== undefined) params.set("length", String(opts.length));
     if (opts.cursor !== undefined) params.set("cursor", String(opts.cursor));
-    const query = params.toString();
+    const qs = params.toString();
     return this.fetchJson<{ queries: Query[]; cursor: number | null }>(
-      `/api/queries${query ? `?${query}` : ""}`,
+      `/api/queries${qs ? `?${qs}` : ""}`,
     );
   }
 
@@ -233,8 +229,8 @@ export class PiholeClient {
         ...rest,
         headers: reqHeaders,
       });
-    } catch (err) {
-      // Browser fetch swallows CORS as a generic TypeError.
+    } catch {
+      // Browser fetch swallows CORS / network failures as a generic TypeError.
       throw new PiholeError(
         `Could not reach ${this.baseUrl}. Check the URL and that CORS is configured (or run trackerdex on the same origin as Pi-hole).`,
         "cors",
@@ -251,7 +247,7 @@ export class PiholeClient {
         const body = await res.text();
         if (body) detail = `${detail} — ${body.slice(0, 200)}`;
       } catch {
-        /* noop */
+        /* ignore */
       }
       throw new PiholeError(
         `Pi-hole returned ${res.status}: ${detail}`,

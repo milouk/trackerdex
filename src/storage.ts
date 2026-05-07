@@ -19,7 +19,7 @@ export function saveCatches(state: CatchState): void {
   try {
     localStorage.setItem(KEY_CATCHES, JSON.stringify(state));
   } catch {
-    // quota exceeded; ignore silently — we'll lose the latest update only
+    // quota exceeded; ignore silently
   }
 }
 
@@ -42,20 +42,4 @@ export function saveConnection(conn: StoredConnection | null): void {
     return;
   }
   localStorage.setItem(KEY_CONN, JSON.stringify(conn));
-}
-
-export function exportCatches(state: CatchState): string {
-  return JSON.stringify({ schemaVersion: 1, exported: Date.now(), state });
-}
-
-export function importCatches(json: string): CatchState | null {
-  try {
-    const parsed = JSON.parse(json);
-    if (parsed && parsed.state && typeof parsed.state === "object") {
-      return parsed.state as CatchState;
-    }
-    return null;
-  } catch {
-    return null;
-  }
 }

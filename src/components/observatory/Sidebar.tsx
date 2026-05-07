@@ -1,10 +1,14 @@
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import type { CatchState, DexEntry, Tier, TrackerType } from "../../types";
+import { fmt } from "../../utils/format";
 import {
+  RARITY_TOOLTIP,
   TIERS_ORDER,
+  TIER_TOOLTIP,
   TYPE_LABEL,
   TYPES_ORDER,
   type Filter,
+  type View,
 } from "./types";
 
 type Props = {
@@ -14,47 +18,50 @@ type Props = {
   onChange: (next: Filter) => void;
 };
 
-function fmt(n: number): string {
-  return n.toLocaleString("en-US");
-}
+const VIEW_OPTIONS: { value: View; label: string; tip: string }[] = [
+  { value: "ALL",      label: "ALL",      tip: "Show every entry — caught and uncaught." },
+  { value: "CAUGHT",   label: "CAUGHT",   tip: "Show only the entries you've encountered in your Pi-hole." },
+  { value: "UNCAUGHT", label: "UNCAUGHT", tip: "Show only the entries you haven't seen yet — silhouettes." },
+];
 
-export function Sidebar({
+const EMPTY_TYPE_COUNTS = (): Record<TrackerType, number> => ({
+  ADVERTISING: 0,
+  ANALYTICS: 0,
+  SOCIAL: 0,
+  CDN: 0,
+  DATA_BROKER: 0,
+  OTHER: 0,
+});
+
+const EMPTY_TIER_COUNTS = (): Record<Tier, number> => ({
+  LEGENDARY: 0,
+  RARE: 0,
+  UNCOMMON: 0,
+  COMMON: 0,
+});
+
+export const Sidebar = memo(function Sidebar({
   entries,
   catches,
   filter,
   onChange,
 }: Props): React.ReactElement {
-  const { typeCounts, typeCaught, tierCounts, tierCaught } = useMemo(() => {
-    const tc: Record<TrackerType, number> = {
-      ADVERTISING: 0,
-      ANALYTICS: 0,
-      SOCIAL: 0,
-      CDN: 0,
-      DATA_BROKER: 0,
-      OTHER: 0,
-    };
-    const tCaught: Record<TrackerType, number> = { ...tc };
-    const trc: Record<Tier, number> = {
-      LEGENDARY: 0,
-      RARE: 0,
-      UNCOMMON: 0,
-      COMMON: 0,
-    };
-    const trCaught: Record<Tier, number> = { ...trc };
+  const counts = useMemo(() => {
+    const typeTotal = EMPTY_TYPE_COUNTS();
+    const typeCaught = EMPTY_TYPE_COUNTS();
+    const tierTotal = EMPTY_TIER_COUNTS();
+    const tierCaught = EMPTY_TIER_COUNTS();
+    let totalCaught = 0;
     for (const e of entries) {
-      tc[e.type]++;
-      trc[e.tier]++;
+      typeTotal[e.type]++;
+      tierTotal[e.tier]++;
       if (catches[e.id]) {
-        tCaught[e.type]++;
-        trCaught[e.tier]++;
+        totalCaught++;
+        typeCaught[e.type]++;
+        tierCaught[e.tier]++;
       }
     }
-    return {
-      typeCounts: tc,
-      typeCaught: tCaught,
-      tierCounts: trc,
-      tierCaught: trCaught,
-    };
+    return { typeTotal, typeCaught, tierTotal, tierCaught, totalCaught };
   }, [entries, catches]);
 
   return (
@@ -76,96 +83,119 @@ export function Sidebar({
       </section>
 
       <section className="ob-side-block">
-        <header className="ob-side-head">
-          <span>TAXA</span>
+        <header
+          className="ob-side-head"
+          title="Type — what kind of tracker this is. Derived from DuckDuckGo Tracker Radar's category for each entity."
+        >
+          <span>TYPE</span>
         </header>
         <ul className="ob-side-list">
-          <li
-            className={`ob-side-item ${filter.type === "ALL" ? "is-active" : ""}`}
+          <FilterRow
+            active={filter.type === "ALL"}
+            label="ALL"
+            count={fmt(entries.length)}
             onClick={() => onChange({ ...filter, type: "ALL" })}
-          >
-            <span className="ob-side-dot" />
-            <span className="ob-side-label">ALL</span>
-            <span className="ob-side-count">{fmt(entries.length)}</span>
-          </li>
+          />
           {TYPES_ORDER.map((t) => (
-            <li
+            <FilterRow
               key={t}
-              className={`ob-side-item ${filter.type === t ? "is-active" : ""}`}
+              active={filter.type === t}
+              dotClass={`ob-type-${t}`}
+              label={TYPE_LABEL[t].toUpperCase()}
+              count={
+                <>
+                  {counts.typeCaught[t]}
+                  <span className="ob-side-denom">/{counts.typeTotal[t]}</span>
+                </>
+              }
               onClick={() => onChange({ ...filter, type: t })}
-            >
-              <span className={`ob-side-dot ob-type-${t}`} />
-              <span className="ob-side-label">
-                {TYPE_LABEL[t].toUpperCase()}
-              </span>
-              <span className="ob-side-count">
-                {typeCaught[t]}
-                <span className="ob-side-denom">/{typeCounts[t]}</span>
-              </span>
-            </li>
+            />
           ))}
         </ul>
       </section>
 
       <section className="ob-side-block">
-        <header className="ob-side-head">
+        <header className="ob-side-head" title={RARITY_TOOLTIP}>
           <span>RARITY</span>
+          <span className="ob-side-counter" aria-hidden="true">?</span>
         </header>
         <ul className="ob-side-list">
-          <li
-            className={`ob-side-item ${filter.tier === "ALL" ? "is-active" : ""}`}
+          <FilterRow
+            active={filter.tier === "ALL"}
+            label="ALL"
+            count={fmt(entries.length)}
             onClick={() => onChange({ ...filter, tier: "ALL" })}
-          >
-            <span className="ob-side-dot" />
-            <span className="ob-side-label">ALL</span>
-            <span className="ob-side-count">{fmt(entries.length)}</span>
-          </li>
+          />
           {TIERS_ORDER.map((t) => (
-            <li
+            <FilterRow
               key={t}
-              className={`ob-side-item ${filter.tier === t ? "is-active" : ""}`}
+              active={filter.tier === t}
+              dotClass={`ob-tier-${t}`}
+              label={t}
+              tip={TIER_TOOLTIP[t]}
+              count={
+                <>
+                  {counts.tierCaught[t]}
+                  <span className="ob-side-denom">/{counts.tierTotal[t]}</span>
+                </>
+              }
               onClick={() => onChange({ ...filter, tier: t })}
-            >
-              <span className={`ob-side-dot ob-tier-${t}`} />
-              <span className="ob-side-label">{t}</span>
-              <span className="ob-side-count">
-                {tierCaught[t]}
-                <span className="ob-side-denom">/{tierCounts[t]}</span>
-              </span>
-            </li>
+            />
           ))}
         </ul>
       </section>
 
       <section className="ob-side-block">
-        <header className="ob-side-head">
-          <span>STATUS</span>
-        </header>
+        <header className="ob-side-head"><span>VIEW</span></header>
         <ul className="ob-side-list">
-          <li
-            className="ob-side-item is-toggle"
-            onClick={() =>
-              onChange({ ...filter, showCaught: !filter.showCaught })
-            }
-          >
-            <span className="ob-side-label">CAUGHT</span>
-            <span className={`ob-toggle ${filter.showCaught ? "is-on" : ""}`}>
-              {filter.showCaught ? "ON" : "OFF"}
-            </span>
-          </li>
-          <li
-            className="ob-side-item is-toggle"
-            onClick={() =>
-              onChange({ ...filter, showUncaught: !filter.showUncaught })
-            }
-          >
-            <span className="ob-side-label">UNSEEN</span>
-            <span className={`ob-toggle ${filter.showUncaught ? "is-on" : ""}`}>
-              {filter.showUncaught ? "ON" : "OFF"}
-            </span>
-          </li>
+          {VIEW_OPTIONS.map((opt) => (
+            <FilterRow
+              key={opt.value}
+              active={filter.view === opt.value}
+              label={opt.label}
+              tip={opt.tip}
+              count={fmt(
+                opt.value === "ALL"
+                  ? entries.length
+                  : opt.value === "CAUGHT"
+                    ? counts.totalCaught
+                    : entries.length - counts.totalCaught,
+              )}
+              onClick={() => onChange({ ...filter, view: opt.value })}
+            />
+          ))}
         </ul>
       </section>
     </aside>
+  );
+});
+
+type FilterRowProps = {
+  active: boolean;
+  dotClass?: string;
+  label: string;
+  count: React.ReactNode;
+  tip?: string;
+  onClick: () => void;
+};
+
+function FilterRow({
+  active,
+  dotClass,
+  label,
+  count,
+  tip,
+  onClick,
+}: FilterRowProps): React.ReactElement {
+  return (
+    <li
+      className={`ob-side-item${active ? " is-active" : ""}`}
+      onClick={onClick}
+      title={tip}
+    >
+      <span className={`ob-side-dot${dotClass ? ` ${dotClass}` : ""}`} />
+      <span className="ob-side-label">{label}</span>
+      <span className="ob-side-count">{count}</span>
+    </li>
   );
 }

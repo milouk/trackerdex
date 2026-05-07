@@ -18,6 +18,10 @@ export default defineConfig(({ mode }) => {
   const piholeUrl = env.VITE_PIHOLE_URL;
 
   return {
+    // Relative asset paths so the same dist/ deploys to any URL —
+    // milouk.me/trackerdex/ via the repo's GH Pages, and
+    // milouk.me/projects/trackerdex/ via the personal site snapshot.
+    base: "./",
     plugins: [react()],
     server: {
       host: "0.0.0.0",

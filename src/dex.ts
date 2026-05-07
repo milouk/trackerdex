@@ -4,12 +4,14 @@ import type { Dex, DexEntry } from "./types";
 let cachedDex: Dex | null = null;
 let entryById: Map<string, DexEntry> | null = null;
 
-export async function loadDex(url: string = "/dex.json"): Promise<Dex> {
+export async function loadDex(
+  url: string = `${import.meta.env.BASE_URL}dex.json`,
+): Promise<Dex> {
   if (cachedDex) return cachedDex;
   const res = await fetch(url);
   if (!res.ok) {
     throw new Error(
-      `Could not load /dex.json (${res.status}). Did you run 'npm run build:dex'?`,
+      `Could not load ${url} (${res.status}). Did you run 'npm run build:dex'?`,
     );
   }
   const dex = (await res.json()) as Dex;
@@ -18,20 +20,13 @@ export async function loadDex(url: string = "/dex.json"): Promise<Dex> {
   return dex;
 }
 
-export function getEntryById(id: string): DexEntry | undefined {
-  return entryById?.get(id);
-}
-
 /**
- * Resolves a fully-qualified blocked domain to a dex entry id, or null if it's
+ * Resolves a fully-qualified blocked domain to a dex entry, or null if it's
  * not a known tracker (a "wild encounter").
  */
-export function resolveDomain(
-  domain: string,
-  dex: Dex,
-): DexEntry | null {
+export function resolveDomain(domain: string, dex: Dex): DexEntry | null {
   const cleaned = domain.replace(/\.$/, "").toLowerCase();
-  // Try exact match first (rarely hits — most blocks are subdomains).
+  // Exact match first (rarely hits — most blocks are subdomains).
   const exact = dex.domainMap[cleaned];
   if (exact) return entryById?.get(exact) ?? null;
 
@@ -39,6 +34,5 @@ export function resolveDomain(
   const registrable = getDomain(cleaned);
   if (!registrable) return null;
   const id = dex.domainMap[registrable];
-  if (!id) return null;
-  return entryById?.get(id) ?? null;
+  return id ? (entryById?.get(id) ?? null) : null;
 }

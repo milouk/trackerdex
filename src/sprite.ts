@@ -1,11 +1,7 @@
 /*
  * Public sprite facade. The internal generator under sprite/* is a TypeScript
- * port of daboth/pagan (GPL-2.0); this module re-exports its API.
+ * port of daboth/pagan (GPL-2.0).
  */
 
-export {
-  generateSprite,
-  renderSpriteToCanvas,
-  SPRITE_GRID_SIZE,
-  type Sprite,
-} from "./sprite/generator";
+export { renderSpriteToCanvas, SPRITE_GRID_SIZE, type Sprite } from "./sprite/generator";
+export { getSprite } from "./sprite/cache";

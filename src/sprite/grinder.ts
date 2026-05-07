@@ -41,13 +41,7 @@ export const SHIELDS = [
   "SHIELD",
 ] as const;
 
-export type ShieldName = (typeof SHIELDS)[number];
-export type WeaponName =
-  | (typeof ONEHANDED_WEAPONS)[number]
-  | (typeof TWOHANDED_WEAPONS)[number];
-
-/** A weapon "loadout" — 1 or 2 entries; if first is a shield, second is a 1H. */
-export type Weapons = readonly [string] | readonly [string, string];
+const SHIELD_SET = new Set<string>(SHIELDS);
 
 const ASPECT_STYLES: readonly (readonly string[])[] = [
   ["HAIR"],
@@ -68,114 +62,96 @@ const ASPECT_STYLES: readonly (readonly string[])[] = [
   [],
 ];
 
-/** Returns all valid weapon-loadout combinations. */
-function initWeaponList(): readonly (readonly string[])[] {
-  const twoHand = TWOHANDED_WEAPONS.map((w) => [w] as const);
-  const oneHand = ONEHANDED_WEAPONS.map((w) => [w] as const);
-
+/**
+ * All valid weapon-loadout combinations, computed once at module load.
+ * Order matches pagan exactly: twohand · onehand · all dual-wields · all
+ * weapon+shield pairs. Don't reorder — the offset of each combo determines
+ * what a given hash decision maps to.
+ */
+const WEAPON_LIST: readonly (readonly string[])[] = (() => {
+  const twoHand: (readonly string[])[] = TWOHANDED_WEAPONS.map((w) => [w]);
+  const oneHand: (readonly string[])[] = ONEHANDED_WEAPONS.map((w) => [w]);
   const dualWield: (readonly string[])[] = [];
-  const weaponShield: (readonly string[])[] = [];
-
   for (const w of ONEHANDED_WEAPONS) {
-    for (const w2 of ONEHANDED_WEAPONS) {
-      dualWield.push([w, w2]);
-    }
-    for (const s of SHIELDS) {
-      // Shield first by convention — the generator routes weapons[0]==shield
-      // through a dedicated layer.
-      weaponShield.push([s, w]);
-    }
+    for (const w2 of ONEHANDED_WEAPONS) dualWield.push([w, w2]);
   }
+  const weaponShield: (readonly string[])[] = [];
+  for (const w of ONEHANDED_WEAPONS) {
+    // Shield first by convention — generator routes weapons[0]==shield specially.
+    for (const s of SHIELDS) weaponShield.push([s, w]);
+  }
+  return twoHand.concat(oneHand, dualWield, weaponShield);
+})();
 
-  return [...twoHand, ...oneHand, ...dualWield, ...weaponShield];
-}
-
-const WEAPON_LIST = initWeaponList();
-
-/** Pads short hashes by appending themselves, matching pagan's fallback. */
+/** Pads short hashes by repeating themselves, matching pagan's fallback. */
 function padHash(hashcode: string): string {
+  if (hashcode.length >= MINIMUM_HASH_LEN) return hashcode;
   let h = hashcode;
   while (h.length < MINIMUM_HASH_LEN) {
-    const need = MINIMUM_HASH_LEN - h.length;
-    h += h.slice(0, need);
+    h += hashcode.slice(0, MINIMUM_HASH_LEN - h.length);
   }
   return h;
 }
 
 function hexToRgb(hex: string): RGB {
-  const clean = hex.startsWith("#") ? hex.slice(1) : hex;
-  if (clean.length !== HEX_COLOR_LEN) {
-    return [128, 128, 128];
-  }
-  const r = parseInt(clean.slice(0, 2), HEX_BASE);
-  const g = parseInt(clean.slice(2, 4), HEX_BASE);
-  const b = parseInt(clean.slice(4, 6), HEX_BASE);
+  const r = parseInt(hex.slice(0, 2), HEX_BASE);
+  const g = parseInt(hex.slice(2, 4), HEX_BASE);
+  const b = parseInt(hex.slice(4, 6), HEX_BASE);
   return [r, g, b];
 }
 
 export function grindColors(hashcode: string): readonly RGB[] {
   const padded = padHash(hashcode);
-  const colors: RGB[] = [];
+  const colors: RGB[] = new Array(COLOR_QUANTITY);
   for (let i = 0; i < COLOR_QUANTITY; i++) {
-    const chunk = padded.slice(i * HEX_COLOR_LEN, (i + 1) * HEX_COLOR_LEN);
-    colors.push(hexToRgb(chunk));
+    colors[i] = hexToRgb(padded.slice(i * HEX_COLOR_LEN, (i + 1) * HEX_COLOR_LEN));
   }
   return colors;
 }
 
 /**
- * Maps a hash-derived value into an integer decision in [1, numDecisions].
- * Mirrors pagan's float arithmetic to keep the same outputs.
+ * Maps a hash-derived value into a fractional decision in [0, numDecisions].
+ * Mirrors pagan's float arithmetic so outputs match the reference impl.
  */
-function mapDecision(
-  maxDigitsum: number,
-  numDecisions: number,
-  digitsum: number,
-): number {
-  return (numDecisions / (maxDigitsum + 1)) * (digitsum + 1);
+function mapDecision(numDecisions: number, digitsum: number): number {
+  return (numDecisions / (MAX_DECISION_VALUE + 1)) * (digitsum + 1);
 }
 
 export function grindAspect(hashcode: string): readonly string[] {
-  const aspectControl = hashcode.slice(0, ASPECT_CONTROL_LEN);
-  const decimal = parseInt(aspectControl, HEX_BASE);
-  const decision = mapDecision(
-    MAX_DECISION_VALUE,
-    ASPECT_STYLES.length,
-    decimal,
+  const decimal = parseInt(hashcode.slice(0, ASPECT_CONTROL_LEN), HEX_BASE);
+  return (
+    chooseFromList(ASPECT_STYLES, mapDecision(ASPECT_STYLES.length, decimal)) ??
+    []
   );
-  return chooseFromList(ASPECT_STYLES, decision);
 }
 
 export function grindWeapon(hashcode: string): readonly string[] {
-  const weaponControl = hashcode.slice(
-    ASPECT_CONTROL_LEN,
-    ASPECT_CONTROL_LEN * 2,
+  const decimal = parseInt(
+    hashcode.slice(ASPECT_CONTROL_LEN, ASPECT_CONTROL_LEN * 2),
+    HEX_BASE,
   );
-  const decimal = parseInt(weaponControl, HEX_BASE);
-  const decision = mapDecision(
-    MAX_DECISION_VALUE,
-    WEAPON_LIST.length,
-    decimal,
+  return (
+    chooseFromList(WEAPON_LIST, mapDecision(WEAPON_LIST.length, decimal)) ?? []
   );
-  return chooseFromList(WEAPON_LIST, decision);
 }
 
 /**
- * Pagan's "choose" walks the list and returns the *last* entry whose index is
- * less than the decision. Replicating the same indexing semantics so outputs
- * match the reference implementation.
+ * Pagan's "choose" walks the list and returns the *last* entry whose index
+ * is strictly less than `decision`. For decision <= 0 (extreme edge case
+ * when the hex chunk is 000000), it returns its initial empty value, which
+ * we model here as `undefined` so callers can fall back to `[]`.
+ *
+ * Lists are short (≤96 entries) so the loop is trivially fast.
  */
-function chooseFromList<T extends readonly unknown[]>(
-  list: readonly T[],
-  decision: number,
-): T {
-  let chosen = list[0]!;
+function chooseFromList<T>(list: readonly T[], decision: number): T | undefined {
+  let chosen: T | undefined;
   for (let i = 0; i < list.length; i++) {
-    if (i < decision) chosen = list[i]!;
+    if (i >= decision) break;
+    chosen = list[i];
   }
   return chosen;
 }
 
-export function isShield(name: string): name is ShieldName {
-  return (SHIELDS as readonly string[]).includes(name);
+export function isShield(name: string): boolean {
+  return SHIELD_SET.has(name);
 }
