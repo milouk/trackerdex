@@ -1,0 +1,16 @@
+# Example: run trackerdex on the same Docker host as Pi-hole. The simplest
+# deployment uses host networking so the browser can hit Pi-hole at the same
+# origin (eliminates the CORS dance entirely). Adapt to your setup.
+
+services:
+  trackerdex:
+    build: .
+    image: trackerdex:latest
+    container_name: trackerdex
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    # If your Pi-hole UI lives behind a reverse proxy (Caddy, nginx, Traefik),
+    # mount trackerdex at e.g. /dex/ on the same hostname so requests to
+    # /api/auth, /api/queries, etc. share an origin with the SPA. That removes
+    # any need to configure CORS on Pi-hole.

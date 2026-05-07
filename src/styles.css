@@ -1,0 +1,44 @@
+@import "./styles/observatory.css";
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #0b0e12;
+  color: #d4dce4;
+  color-scheme: dark;
+  font-family:
+    "JetBrains Mono",
+    "IBM Plex Mono",
+    ui-monospace,
+    "SFMono-Regular",
+    Menlo,
+    Consolas,
+    monospace;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+  overflow: hidden;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+a {
+  color: inherit;
+}
+
+html[data-theme="light"] body {
+  background: #f6f5ee;
+  color: #14181c;
+  color-scheme: light;
+}
