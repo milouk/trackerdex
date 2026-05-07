@@ -20,6 +20,7 @@ import {
   saveCatches,
   saveConnection,
 } from "./storage";
+import { loadConfig, type RuntimeConfig } from "./config";
 import { warmSpriteCache } from "./sprite";
 import { useTheme } from "./theme";
 import type {
@@ -64,6 +65,7 @@ export default function App(): React.ReactElement {
   const [selected, setSelected] = useState<DexEntry | null>(null);
   const [feed, setFeed] = useState<LiveEvent[]>([]);
   const [filter, setFilter] = useState<Filter>(DEFAULT_FILTER);
+  const [config, setConfig] = useState<RuntimeConfig>({});
   const { theme, toggle: toggleTheme } = useTheme();
 
   const sessionFirstCatchRef = useRef<Set<string>>(new Set());
@@ -77,14 +79,15 @@ export default function App(): React.ReactElement {
     return () => window.clearTimeout(id);
   }, [catches, status.kind]);
 
-  // Initial load: dex + saved connection probe.
+  // Initial load: dex + runtime config + saved connection probe.
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        const loaded = await loadDex();
+        const [loaded, runtime] = await Promise.all([loadDex(), loadConfig()]);
         if (!alive) return;
         setDex(loaded);
+        setConfig(runtime);
         // Pre-warm sprite cache for the entries most likely to be visible
         // on first paint, in idle slices so we don't block first render.
         warmSpriteCache(
@@ -110,6 +113,27 @@ export default function App(): React.ReactElement {
             saveConnection(null);
           }
         }
+
+        // No saved session — try the runtime-config credentials silently.
+        if (runtime.piholeHost && runtime.piholePassword) {
+          const client = new PiholeClient(runtime.piholeHost);
+          try {
+            const session = await client.login(runtime.piholePassword);
+            if (!alive) return;
+            const stored: StoredConnection = {
+              baseUrl: client.baseUrl,
+              sid: session.sid,
+              expiresAt: session.expiresAt,
+            };
+            saveConnection(stored);
+            setStatus({ kind: "connected", client, baseUrl: client.baseUrl });
+            return;
+          } catch {
+            // Fall through to manual connect screen with the host/password
+            // pre-filled so the user can see what failed.
+          }
+        }
+
         if (alive) setStatus({ kind: "needs-connection" });
       } catch (err) {
         if (alive) {
@@ -328,7 +352,16 @@ export default function App(): React.ReactElement {
   if (status.kind === "loading") return <Loading />;
   if (status.kind === "error") return <ErrorPanel message={status.message} />;
   if (status.kind === "needs-connection") {
-    return <Connect onConnect={handleConnect} onDemo={handleDemo} />;
+    return (
+      <Connect
+        onConnect={handleConnect}
+        onDemo={handleDemo}
+        defaults={{
+          host: config.piholeHost,
+          password: config.piholePassword,
+        }}
+      />
+    );
   }
   if (!dex) return <Loading />;
 

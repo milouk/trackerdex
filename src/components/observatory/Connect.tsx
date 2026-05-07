@@ -10,6 +10,8 @@ type Props = {
     storedConnection: StoredConnection,
   ) => void;
   onDemo: () => void;
+  /** Pre-fill values from runtime config (env-var driven). */
+  defaults?: { host?: string; password?: string };
 };
 
 const DEFAULT_URL =
@@ -17,9 +19,13 @@ const DEFAULT_URL =
     ? window.location.origin
     : "http://pi.hole";
 
-export function Connect({ onConnect, onDemo }: Props): React.ReactElement {
-  const [url, setUrl] = useState(DEFAULT_URL);
-  const [password, setPassword] = useState("");
+export function Connect({
+  onConnect,
+  onDemo,
+  defaults,
+}: Props): React.ReactElement {
+  const [url, setUrl] = useState(defaults?.host ?? DEFAULT_URL);
+  const [password, setPassword] = useState(defaults?.password ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
