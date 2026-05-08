@@ -94,6 +94,29 @@ export default function App(): React.ReactElement {
           loaded.entries.slice(0, 240).map((e) => e.entityName),
         );
 
+        // Priority 1: runtime config (operator-provided env vars). When the
+        // operator ships PIHOLE_PASSWORD, that's the source of truth — always
+        // try it first, regardless of any stale saved session in localStorage.
+        if (runtime.piholePassword) {
+          const url = runtime.piholeHost || window.location.origin;
+          const client = new PiholeClient(url);
+          try {
+            const session = await client.login(runtime.piholePassword);
+            if (!alive) return;
+            const stored: StoredConnection = {
+              baseUrl: client.baseUrl,
+              sid: session.sid,
+              expiresAt: session.expiresAt,
+            };
+            saveConnection(stored);
+            setStatus({ kind: "connected", client, baseUrl: client.baseUrl });
+            return;
+          } catch {
+            // env-var creds failed — fall through to saved / manual.
+          }
+        }
+
+        // Priority 2: previously-saved session from a manual connect.
         const saved = loadConnection();
         if (saved) {
           const client = new PiholeClient(saved.baseUrl, {
@@ -111,30 +134,6 @@ export default function App(): React.ReactElement {
             return;
           } catch {
             saveConnection(null);
-          }
-        }
-
-        // No saved session — try the runtime-config credentials silently.
-        // Default to same-origin when piholeHost is unset: the container
-        // proxies /api/* to the Pi-hole on its private network, so we
-        // never need cross-origin browser fetches.
-        if (runtime.piholePassword) {
-          const url = runtime.piholeHost || window.location.origin;
-          const client = new PiholeClient(url);
-          try {
-            const session = await client.login(runtime.piholePassword);
-            if (!alive) return;
-            const stored: StoredConnection = {
-              baseUrl: client.baseUrl,
-              sid: session.sid,
-              expiresAt: session.expiresAt,
-            };
-            saveConnection(stored);
-            setStatus({ kind: "connected", client, baseUrl: client.baseUrl });
-            return;
-          } catch {
-            // Fall through to manual connect screen with the host/password
-            // pre-filled so the user can see what failed.
           }
         }
 
