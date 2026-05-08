@@ -23,6 +23,8 @@
   <a href="https://ko-fi.com/milouk"><img alt="ko-fi" src="https://img.shields.io/badge/ko--fi-buy_me_a_coffee-FF5E5B?logo=ko-fi&logoColor=white"></a>
 </p>
 
+<p align="center"><em>Gotta block 'em all!</em></p>
+
 > A companion to [**Pi-hole**](https://pi-hole.net/). Every blocked DNS query
 > turns into a *catch* in your personal dex of ~19,000 internet trackers,
 > each rendered as a deterministic 16×16 RPG character. Tiers (legendary /
@@ -76,17 +78,32 @@ sparkline.
 
 ## Quickstart
 
-### Docker
+### Docker — auto-connect (recommended)
+
+Pass your Pi-hole password as an env var and trackerdex logs in for you on
+every page load. The container's bundled nginx reverse-proxies `/api/*` to
+the `pihole` container on the same network, so the browser only ever talks
+to its own origin (no CORS, no Pi-hole config changes).
 
 ```bash
 docker run -d \
   --name trackerdex \
+  --network <your-pihole-network> \
   -p 8080:80 \
+  -e PIHOLE_PASSWORD=<your-pi-hole-app-password> \
   ghcr.io/milouk/trackerdex:latest
 ```
 
-Open `http://<host>:8080`, enter your Pi-hole URL and an
-[app password](https://docs.pi-hole.net/api/auth/), done.
+Open `http://<host>:8080` → you land directly on your dex.
+
+### Docker — manual connect
+
+Skip the env var and you'll get the connect screen on first visit; type
+your Pi-hole URL + password, the session token is kept in `localStorage`.
+
+```bash
+docker run -d --name trackerdex -p 8080:80 ghcr.io/milouk/trackerdex:latest
+```
 
 ### docker-compose
 
@@ -98,9 +115,37 @@ services:
     restart: unless-stopped
     ports:
       - "8080:80"
+    env_file:
+      - ./trackerdex.env       # PIHOLE_PASSWORD=...
+    # If your Pi-hole isn't reachable as `pihole` on the same docker
+    # network, also set:
+    #   PIHOLE_UPSTREAM=http://<container-or-host>[:port]
 ```
 
-### From source
+`./trackerdex.env`:
+
+```dotenv
+PIHOLE_PASSWORD=your-pi-hole-app-password
+# Optional — only set if you need the SPA to point at a different host
+# than the one the page is served from. Leave unset for same-origin
+# (the default; works with the bundled nginx /api/* proxy).
+# PIHOLE_HOST=https://pihole.example.com
+```
+
+### Environment variables
+
+| Variable          | Required | Default      | Effect |
+|-------------------|----------|--------------|--------|
+| `PIHOLE_PASSWORD` | for auto-connect | _unset_ | When set, the SPA fetches `/config.json` on boot and `POST /api/auth` automatically; lands on the dex without showing the connect screen. Operator-supplied env vars take priority over any stale localStorage session. |
+| `PIHOLE_HOST`     | no       | _unset_      | Override the URL the SPA hits for the API. Leave blank to use same-origin (recommended; nginx proxies `/api/*` to the `pihole` upstream). Set if your Pi-hole is reachable elsewhere and you'd rather the browser hit it directly. |
+
+> **Heads-up about exposure.** `PIHOLE_PASSWORD` ends up in the
+> publicly-readable `/config.json` so the SPA can pick it up at boot. Only
+> set it on deployments where access is already restricted (LAN, behind
+> auth at your reverse proxy). For public deployments, leave it unset and
+> let users connect manually.
+
+### From source (development)
 
 ```bash
 git clone https://github.com/milouk/trackerdex.git
@@ -171,23 +216,34 @@ A tracker becomes **shiny** at ≥15,000 cumulative encounters in your
 network — its sprite flips to a different deterministic loadout (same for
 every user; everyone's shiny Google looks identical).
 
-## CORS, hosting, security
+## CORS & hosting
 
-Pi-hole v6 doesn't send permissive CORS headers by default. Easiest path:
-**run trackerdex behind the same reverse proxy as your Pi-hole UI**, so
-`/api/*` and the SPA share an origin. No CORS config needed.
+The trackerdex container ships with an nginx reverse proxy that forwards
+`/api/*` to a Pi-hole upstream on the docker network, so the SPA only
+ever talks to its own origin — **no CORS configuration on Pi-hole's side
+is needed**, and `PIHOLE_PASSWORD` never has to be exposed to a different
+host.
 
-If you need cross-origin, allowlist trackerdex's URL in
-`/etc/pihole/pihole-FTL.toml`:
-
-```toml
-[webserver.api]
-cors_hosts = ["http://your-host:8080"]
+```text
+browser ──► trackerdex (nginx) ──► /api/* proxy ──► pihole container
+                  ▲                                       │
+                  └─────────── same-origin ───────────────┘
 ```
 
+The default upstream is `http://pihole/` (the conventional container
+name). If your Pi-hole has a different name on the network, override
+with `PIHOLE_UPSTREAM=http://<name>[:port]`.
+
+If you'd rather have the browser talk to Pi-hole directly (skipping the
+proxy), set `PIHOLE_HOST=https://pihole.example.com` — but you'll then
+need to allowlist trackerdex's origin in Pi-hole's
+`/etc/pihole/pihole-FTL.toml` (or via Traefik/Caddy headers if you
+front-end them with a reverse proxy).
+
 > **App passwords.** Generate an app password under *Pi-hole → Settings →
-> API* rather than using your main admin password. Trackerdex stores only
-> the *session token* in your browser, never the password.
+> API* rather than using your main admin password. Trackerdex's
+> `/config.json` (and `localStorage`) carries only that app password,
+> never your main one.
 
 ## Tech stack
 
