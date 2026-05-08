@@ -134,10 +134,10 @@ PIHOLE_PASSWORD=your-pi-hole-app-password
 
 ### Environment variables
 
-| Variable          | Required | Default      | Effect |
-|-------------------|----------|--------------|--------|
-| `PIHOLE_PASSWORD` | for auto-connect | _unset_ | When set, the SPA fetches `/config.json` on boot and `POST /api/auth` automatically; lands on the dex without showing the connect screen. Operator-supplied env vars take priority over any stale localStorage session. |
-| `PIHOLE_HOST`     | no       | _unset_      | Override the URL the SPA hits for the API. Leave blank to use same-origin (recommended; nginx proxies `/api/*` to the `pihole` upstream). Set if your Pi-hole is reachable elsewhere and you'd rather the browser hit it directly. |
+| Variable          | Required          | Default | Effect                                                                                                                                                                                                                              |
+|-------------------|-------------------|---------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `PIHOLE_PASSWORD` | for auto-connect  | *unset* | When set, the SPA fetches `/config.json` on boot and `POST /api/auth` automatically; lands on the dex without showing the connect screen. Operator-supplied env vars take priority over any stale localStorage session.             |
+| `PIHOLE_HOST`     | no                | *unset* | Override the URL the SPA hits for the API. Leave blank to use same-origin (recommended; nginx proxies `/api/*` to the `pihole` upstream). Set if your Pi-hole is reachable elsewhere and you'd rather the browser hit it directly.   |
 
 > **Heads-up about exposure.** `PIHOLE_PASSWORD` ends up in the
 > publicly-readable `/config.json` so the SPA can pick it up at boot. Only
