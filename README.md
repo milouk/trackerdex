@@ -135,10 +135,11 @@ PIHOLE_PASSWORD=your-pi-hole-app-password
 ### Environment variables
 
 - **`PIHOLE_PASSWORD`** — *required for auto-connect, default unset.*
-  When set, the SPA fetches `/config.json` on boot and `POST /api/auth`
-  automatically; lands on the dex without showing the connect screen.
-  Operator-supplied env vars take priority over any stale localStorage
-  session.
+  When set, the container's entrypoint authenticates against Pi-hole
+  itself at startup and writes only the resulting session ID into
+  `/config.json`. The SPA picks that up and lands on the dex without
+  showing the connect screen. A background refresh loop renews the
+  session before it expires. **The password never reaches the browser.**
 
 - **`PIHOLE_HOST`** — *optional, default unset (same-origin).*
   Override the URL the SPA hits for the API. Leave blank to use
@@ -146,11 +147,15 @@ PIHOLE_PASSWORD=your-pi-hole-app-password
   upstream). Set if your Pi-hole is reachable elsewhere and you'd rather
   the browser hit it directly.
 
-> **Heads-up about exposure.** `PIHOLE_PASSWORD` ends up in the
-> publicly-readable `/config.json` so the SPA can pick it up at boot. Only
-> set it on deployments where access is already restricted (LAN, behind
-> auth at your reverse proxy). For public deployments, leave it unset and
-> let users connect manually.
+- **`PIHOLE_UPSTREAM`** — *optional, default `http://pihole`.*
+  Where the container's entrypoint sends its auth handshake. Override
+  if your Pi-hole container has a different name on the docker network.
+
+> **What's in `/config.json`.** Only `{ piholeHost, sid, expiresAt }`.
+> SIDs are short-lived (Pi-hole's default validity is 30 min) and bound
+> to your Pi-hole instance. If you're upgrading from v1.0.x, this is a
+> security improvement: prior versions wrote `PIHOLE_PASSWORD` directly
+> into `/config.json`, which leaked the password on public deploys.
 
 ### From source (development)
 

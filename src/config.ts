@@ -1,16 +1,19 @@
 /*
- * Runtime config — fetched once from /config.json, which the container
- * entrypoint writes from env vars at startup. Used to pre-fill connect-
- * screen credentials without baking them into the image.
+ * Runtime config fetched from /config.json. The container's entrypoint
+ * authenticates against Pi-hole at startup using PIHOLE_PASSWORD and writes
+ * only a session ID here — the password itself never reaches the browser.
  *
- * The endpoint is always present (entrypoint writes empty strings when
- * env vars are unset). A fetch failure is treated as "no config" and
- * the SPA falls back to its built-in defaults.
+ * (v1.0.x used to put PIHOLE_PASSWORD directly in this file; that was a
+ * documented security tradeoff that's been removed.)
  */
 
 export type RuntimeConfig = {
+  /** Optional URL for the SPA to hit. Empty means "use same-origin". */
   piholeHost?: string;
-  piholePassword?: string;
+  /** Pi-hole session ID, obtained server-side by the container. */
+  sid?: string;
+  /** Epoch seconds when the SID expires. */
+  expiresAt?: number;
 };
 
 let cached: RuntimeConfig | null = null;
@@ -25,12 +28,20 @@ export async function loadConfig(): Promise<RuntimeConfig> {
     const raw = (await res.json()) as RuntimeConfig;
     cached = {
       piholeHost: raw.piholeHost?.trim() || undefined,
-      piholePassword: raw.piholePassword || undefined,
+      sid: raw.sid?.trim() || undefined,
+      expiresAt:
+        typeof raw.expiresAt === "number" && raw.expiresAt > 0
+          ? raw.expiresAt
+          : undefined,
     };
   } catch {
-    // Public deploys (the personal-site snapshot) don't ship config.json;
-    // a missing file is expected, not an error.
     cached = {};
   }
   return cached;
+}
+
+/** Force a fresh fetch (used when an SID expires mid-session). */
+export function refreshConfig(): Promise<RuntimeConfig> {
+  cached = null;
+  return loadConfig();
 }

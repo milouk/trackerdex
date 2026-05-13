@@ -94,25 +94,35 @@ export default function App(): React.ReactElement {
           loaded.entries.slice(0, 240).map((e) => e.entityName),
         );
 
-        // Priority 1: runtime config (operator-provided env vars). When the
-        // operator ships PIHOLE_PASSWORD, that's the source of truth — always
-        // try it first, regardless of any stale saved session in localStorage.
-        if (runtime.piholePassword) {
+        // Priority 1: SID provided by the container at startup. The
+        // container's entrypoint authenticates against Pi-hole using
+        // PIHOLE_PASSWORD server-side and writes only a session ID into
+        // config.json — the password never reaches the browser.
+        if (
+          runtime.sid &&
+          runtime.expiresAt &&
+          runtime.expiresAt * 1000 > Date.now() + 30_000
+        ) {
           const url = runtime.piholeHost || window.location.origin;
-          const client = new PiholeClient(url);
+          const expiresAtMs = runtime.expiresAt * 1000;
+          const client = new PiholeClient(url, {
+            sid: runtime.sid,
+            validity: Math.max(30, Math.floor(runtime.expiresAt - Date.now() / 1000)),
+            expiresAt: expiresAtMs,
+          });
           try {
-            const session = await client.login(runtime.piholePassword);
+            await client.getSummary();
             if (!alive) return;
             const stored: StoredConnection = {
               baseUrl: client.baseUrl,
-              sid: session.sid,
-              expiresAt: session.expiresAt,
+              sid: runtime.sid,
+              expiresAt: expiresAtMs,
             };
             saveConnection(stored);
             setStatus({ kind: "connected", client, baseUrl: client.baseUrl });
             return;
           } catch {
-            // env-var creds failed — fall through to saved / manual.
+            // SID didn't validate — fall through to saved / manual.
           }
         }
 
@@ -361,7 +371,6 @@ export default function App(): React.ReactElement {
         onDemo={handleDemo}
         defaults={{
           host: config.piholeHost,
-          password: config.piholePassword,
         }}
       />
     );
